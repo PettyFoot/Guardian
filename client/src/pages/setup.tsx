@@ -164,6 +164,16 @@ export default function Setup() {
                   </>
                 )}
               </Button>
+
+              <div className="text-center mt-4">
+                <Button 
+                  variant="outline"
+                  onClick={() => setLocation("/demo")}
+                  className="text-sm"
+                >
+                  Try Demo Mode Instead
+                </Button>
+              </div>
             </div>
           </CardContent>
         </Card>
