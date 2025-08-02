@@ -1,8 +1,9 @@
-import { Switch, Route } from "wouter";
+import { Switch, Route, Redirect } from "wouter";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { AuthProvider, useAuth } from "@/hooks/use-auth";
 import Dashboard from "@/pages/dashboard";
 import EmailQueue from "@/pages/email-queue";
 import Contacts from "@/pages/contacts";
@@ -11,15 +12,53 @@ import Settings from "@/pages/settings";
 import Setup from "@/pages/setup";
 import NotFound from "@/pages/not-found";
 
+function ProtectedRoute({ component: Component }: { component: React.ComponentType }) {
+  const { isAuthenticated, isLoading } = useAuth();
+  
+  if (isLoading) {
+    return (
+      <div className="h-screen flex items-center justify-center">
+        <div className="animate-spin w-8 h-8 border-4 border-primary border-t-transparent rounded-full" />
+      </div>
+    );
+  }
+  
+  if (!isAuthenticated) {
+    return <Redirect to="/setup" />;
+  }
+  
+  return <Component />;
+}
+
 function Router() {
+  const { isAuthenticated, isLoading } = useAuth();
+  
+  if (isLoading) {
+    return (
+      <div className="h-screen flex items-center justify-center">
+        <div className="animate-spin w-8 h-8 border-4 border-primary border-t-transparent rounded-full" />
+      </div>
+    );
+  }
+
   return (
     <Switch>
-      <Route path="/" component={Dashboard} />
       <Route path="/setup" component={Setup} />
-      <Route path="/email-queue" component={EmailQueue} />
-      <Route path="/contacts" component={Contacts} />
-      <Route path="/donations" component={Donations} />
-      <Route path="/settings" component={Settings} />
+      <Route path="/">
+        {isAuthenticated ? <Dashboard /> : <Redirect to="/setup" />}
+      </Route>
+      <Route path="/email-queue">
+        <ProtectedRoute component={EmailQueue} />
+      </Route>
+      <Route path="/contacts">
+        <ProtectedRoute component={Contacts} />
+      </Route>
+      <Route path="/donations">
+        <ProtectedRoute component={Donations} />
+      </Route>
+      <Route path="/settings">
+        <ProtectedRoute component={Settings} />
+      </Route>
       <Route component={NotFound} />
     </Switch>
   );
@@ -28,10 +67,12 @@ function Router() {
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <TooltipProvider>
-        <Toaster />
-        <Router />
-      </TooltipProvider>
+      <AuthProvider>
+        <TooltipProvider>
+          <Toaster />
+          <Router />
+        </TooltipProvider>
+      </AuthProvider>
     </QueryClientProvider>
   );
 }

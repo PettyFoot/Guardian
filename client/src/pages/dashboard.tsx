@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { apiRequest } from "@/lib/queryClient";
+import { useAuth } from "@/hooks/use-auth";
 import { 
   Shield, 
   Filter, 
@@ -22,32 +23,34 @@ import {
   Server
 } from "lucide-react";
 
-// Mock user ID - in real app this would come from auth
-const CURRENT_USER_ID = "user-123";
-
 export default function Dashboard() {
+  const { user } = useAuth();
+
   const { data: stats, isLoading: statsLoading } = useQuery({
-    queryKey: ["/api/dashboard/stats"],
+    queryKey: ["/api/dashboard/stats", user?.id],
     queryFn: async () => {
-      const res = await apiRequest("GET", `/api/dashboard/stats?userId=${CURRENT_USER_ID}`);
+      const res = await apiRequest("GET", `/api/dashboard/stats?userId=${user?.id}`);
       return res.json();
-    }
+    },
+    enabled: !!user?.id
   });
 
   const { data: pendingEmails, isLoading: emailsLoading } = useQuery({
-    queryKey: ["/api/pending-emails"],
+    queryKey: ["/api/pending-emails", user?.id],
     queryFn: async () => {
-      const res = await apiRequest("GET", `/api/pending-emails?userId=${CURRENT_USER_ID}`);
+      const res = await apiRequest("GET", `/api/pending-emails?userId=${user?.id}`);
       return res.json();
-    }
+    },
+    enabled: !!user?.id
   });
 
   const { data: recentDonations, isLoading: donationsLoading } = useQuery({
-    queryKey: ["/api/donations/recent"],
+    queryKey: ["/api/donations/recent", user?.id],
     queryFn: async () => {
-      const res = await apiRequest("GET", `/api/donations/recent?userId=${CURRENT_USER_ID}&limit=5`);
+      const res = await apiRequest("GET", `/api/donations/recent?userId=${user?.id}&limit=5`);
       return res.json();
-    }
+    },
+    enabled: !!user?.id
   });
 
   if (statsLoading) {

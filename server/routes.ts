@@ -7,6 +7,22 @@ import { emailProcessor } from "./services/email-processor";
 import { insertUserSchema, insertContactSchema } from "@shared/schema";
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  // User routes
+  app.get("/api/user/:id", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const user = await storage.getUser(id);
+      
+      if (!user) {
+        return res.status(404).json({ message: "User not found" });
+      }
+      
+      res.json(user);
+    } catch (error: any) {
+      res.status(500).json({ message: "Error fetching user: " + error.message });
+    }
+  });
+
   // Gmail OAuth routes
   app.get("/api/auth/gmail", async (req, res) => {
     try {

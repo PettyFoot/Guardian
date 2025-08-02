@@ -9,6 +9,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useLocation } from "wouter";
+import { useAuth } from "@/hooks/use-auth";
 import { Shield, Mail, CheckCircle, AlertCircle, ArrowRight } from "lucide-react";
 
 export default function Setup() {
@@ -16,6 +17,14 @@ export default function Setup() {
   const [userEmail, setUserEmail] = useState("");
   const [authInProgress, setAuthInProgress] = useState(false);
   const { toast } = useToast();
+  const { login, isAuthenticated } = useAuth();
+
+  // Redirect if already authenticated
+  useEffect(() => {
+    if (isAuthenticated) {
+      setLocation("/");
+    }
+  }, [isAuthenticated, setLocation]);
 
   // Check for OAuth callback code in URL
   useEffect(() => {
@@ -37,7 +46,7 @@ export default function Setup() {
       return res.json();
     },
     onSuccess: (data) => {
-      localStorage.setItem('user_id', data.user.id);
+      login(data.user);
       toast({
         title: "Gmail Connected!",
         description: "Your email filtering system is now active.",
