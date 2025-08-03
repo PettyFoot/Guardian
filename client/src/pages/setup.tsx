@@ -10,13 +10,14 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useLocation } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
-import { Shield, Mail, CheckCircle, AlertCircle, ArrowRight } from "lucide-react";
+import { Shield, Mail, CheckCircle, AlertCircle, ArrowRight, RefreshCw } from "lucide-react";
 
 function ExistingUserLogin() {
   const { login } = useAuth();
   const [, setLocation] = useLocation();
+  const { toast } = useToast();
   
-  const { data: users } = useQuery({
+  const { data: users, refetch, isLoading } = useQuery({
     queryKey: ['/api/users'],
     queryFn: async () => {
       const res = await apiRequest("GET", "/api/users");
@@ -24,26 +25,64 @@ function ExistingUserLogin() {
     },
   });
 
+  const handleUserLogin = async (user: any) => {
+    try {
+      console.log('Attempting to login user:', user);
+      
+      // First verify the user still exists
+      const verifyRes = await apiRequest("GET", `/api/user/${user.id}`);
+      if (!verifyRes.ok) {
+        toast({
+          title: "Account Not Found",
+          description: "This account has been deleted. Please create a new account.",
+          variant: "destructive",
+        });
+        // Refresh the user list to remove deleted accounts
+        refetch();
+        return;
+      }
+      
+      login({
+        id: user.id,
+        email: user.email,
+        gmailAccessToken: user.gmailToken,
+        gmailRefreshToken: user.gmailRefreshToken
+      });
+      setLocation("/");
+    } catch (error: any) {
+      console.error('Login error:', error);
+      toast({
+        title: "Login Failed",
+        description: "Account may have been deleted. Please create a new account.",
+        variant: "destructive",
+      });
+      refetch();
+    }
+  };
+
   if (!users || users.length === 0) {
     return null;
   }
 
   return (
     <div className="space-y-2">
+      <div className="flex items-center justify-between mb-2">
+        <h3 className="text-sm font-medium text-gray-700">Existing Accounts</h3>
+        <Button
+          variant="ghost" 
+          size="sm"
+          onClick={() => refetch()}
+          disabled={isLoading}
+          className="text-xs h-6 px-2"
+        >
+          <RefreshCw className={`h-3 w-3 ${isLoading ? 'animate-spin' : ''}`} />
+        </Button>
+      </div>
       {users.map((user: any) => (
         <Button 
           key={user.id}
           variant="ghost"
-          onClick={() => {
-            console.log('Logging in user:', user);
-            login({
-              id: user.id,
-              email: user.email,
-              gmailAccessToken: user.gmailToken,
-              gmailRefreshToken: user.gmailRefreshToken
-            });
-            setLocation("/");
-          }}
+          onClick={() => handleUserLogin(user)}
           className="text-sm w-full justify-start"
         >
           Continue as {user.email}

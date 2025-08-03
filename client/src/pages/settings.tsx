@@ -12,7 +12,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
 import { useMutation } from "@tanstack/react-query";
-import { apiRequest } from "@/lib/queryClient";
+import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useLocation } from "wouter";
 import { Save, Mail, Shield, DollarSign, Bell, AlertTriangle, UserX } from "lucide-react";
 
@@ -97,6 +97,8 @@ Email Guardian System`);
         title: "Account Deleted",
         description: "Your account and all data have been permanently deleted.",
       });
+      // Clear the query cache to remove deleted user from login list
+      queryClient.invalidateQueries({ queryKey: ['/api/users'] });
       logout();
       setLocation("/setup");
     },
