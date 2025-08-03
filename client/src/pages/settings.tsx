@@ -49,7 +49,16 @@ Email Guardian System`);
   const revokeGmailMutation = useMutation({
     mutationFn: async () => {
       const res = await apiRequest("POST", "/api/auth/gmail/revoke", { userId: user?.id });
-      return res.json();
+      
+      if (!res.ok) {
+        const errorText = await res.text();
+        console.error('Gmail revoke error response:', errorText);
+        throw new Error(`Server error: ${res.status} ${res.statusText}`);
+      }
+      
+      const result = await res.json();
+      console.log('Gmail access revoked successfully:', result);
+      return result;
     },
     onSuccess: () => {
       toast({
@@ -60,6 +69,7 @@ Email Guardian System`);
       setLocation("/setup");
     },
     onError: (error: any) => {
+      console.error('Gmail revoke mutation error:', error);
       toast({
         title: "Error",
         description: error.message || "Failed to revoke Gmail access",
@@ -71,7 +81,16 @@ Email Guardian System`);
   const deleteAccountMutation = useMutation({
     mutationFn: async () => {
       const res = await apiRequest("DELETE", `/api/user/${user?.id}`);
-      return res.json();
+      
+      if (!res.ok) {
+        const errorText = await res.text();
+        console.error('Delete account error response:', errorText);
+        throw new Error(`Server error: ${res.status} ${res.statusText}`);
+      }
+      
+      const result = await res.json();
+      console.log('Account deleted successfully:', result);
+      return result;
     },
     onSuccess: () => {
       toast({
@@ -82,6 +101,7 @@ Email Guardian System`);
       setLocation("/setup");
     },
     onError: (error: any) => {
+      console.error('Delete account mutation error:', error);
       toast({
         title: "Error",
         description: error.message || "Failed to delete account",

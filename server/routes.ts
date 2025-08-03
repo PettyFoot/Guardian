@@ -34,27 +34,34 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.delete("/api/user/:id", async (req, res) => {
     try {
+      console.log('Delete user request received for ID:', req.params.id);
       const { id } = req.params;
       const user = await storage.getUser(id);
       
       if (!user) {
+        console.error('User not found for deletion:', id);
         return res.status(404).json({ message: "User not found" });
       }
 
       // Revoke Gmail tokens if they exist
       if (user.gmailRefreshToken) {
         try {
+          console.log('Revoking Gmail tokens before account deletion...');
           await gmailService.revokeTokens(user.gmailRefreshToken);
+          console.log('Gmail tokens revoked successfully');
         } catch (error: any) {
-          console.log('Google token revocation failed:', error.message);
+          console.error('Google token revocation failed during deletion:', error.message);
         }
       }
 
       // Delete user and all associated data (cascade will handle contacts, emails, etc.)
+      console.log('Deleting user from database...');
       await storage.deleteUser(id);
+      console.log('User deleted successfully');
 
       res.json({ message: "User account deleted successfully" });
     } catch (error: any) {
+      console.error('Error in delete user endpoint:', error);
       res.status(500).json({ message: "Error deleting user: " + error.message });
     }
   });
@@ -72,30 +79,43 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Gmail revoke access
   app.post("/api/auth/gmail/revoke", async (req, res) => {
     try {
+      console.log('Gmail revoke request received:', req.body);
       const { userId } = req.body;
       
       if (!userId) {
+        console.error('No userId provided in revoke request');
         return res.status(400).json({ message: "User ID is required" });
       }
 
       const user = await storage.getUser(userId);
-      if (!user || !user.gmailRefreshToken) {
-        return res.status(404).json({ message: "User not found or no Gmail tokens" });
+      if (!user) {
+        console.error('User not found:', userId);
+        return res.status(404).json({ message: "User not found" });
+      }
+
+      if (!user.gmailRefreshToken) {
+        console.log('No Gmail refresh token found for user:', userId);
+        return res.status(400).json({ message: "No Gmail tokens to revoke" });
       }
 
       // Revoke the refresh token with Google
       try {
+        console.log('Attempting to revoke tokens with Google...');
         await gmailService.revokeTokens(user.gmailRefreshToken);
+        console.log('Google token revocation successful');
       } catch (error: any) {
-        console.log('Google token revocation failed:', error.message);
+        console.error('Google token revocation failed:', error.message);
         // Continue anyway to clear local tokens
       }
 
       // Clear Gmail tokens from database
+      console.log('Clearing Gmail tokens from database...');
       await storage.updateUserGmailTokens(userId, "", "");
+      console.log('Gmail tokens cleared from database');
 
       res.json({ message: "Gmail access revoked successfully" });
     } catch (error: any) {
+      console.error('Error in Gmail revoke endpoint:', error);
       res.status(500).json({ message: "Error revoking Gmail access: " + error.message });
     }
   });
