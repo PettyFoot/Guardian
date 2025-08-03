@@ -17,6 +17,7 @@ export interface IStorage {
   createUser(user: InsertUser): Promise<User>;
   updateUserGmailTokens(id: string, token: string, refreshToken: string): Promise<User>;
   updateUserStripeCustomerId(id: string, customerId: string): Promise<User>;
+  deleteUser(id: string): Promise<void>;
 
   // Contact methods
   getContacts(userId: string): Promise<Contact[]>;
@@ -88,6 +89,10 @@ export class DatabaseStorage implements IStorage {
       .where(eq(users.id, id))
       .returning();
     return user;
+  }
+
+  async deleteUser(id: string): Promise<void> {
+    await db.delete(users).where(eq(users.id, id));
   }
 
   async getContacts(userId: string): Promise<Contact[]> {

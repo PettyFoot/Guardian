@@ -8,10 +8,17 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useToast } from "@/hooks/use-toast";
-import { Save, Mail, Shield, DollarSign, Bell } from "lucide-react";
+import { useAuth } from "@/hooks/use-auth";
+import { useMutation } from "@tanstack/react-query";
+import { apiRequest } from "@/lib/queryClient";
+import { useLocation } from "wouter";
+import { Save, Mail, Shield, DollarSign, Bell, AlertTriangle, UserX } from "lucide-react";
 
 export default function Settings() {
+  const { user, logout } = useAuth();
+  const [, setLocation] = useLocation();
   const [gmailConnected, setGmailConnected] = useState(true);
   const [autoProcessing, setAutoProcessing] = useState(true);
   const [donationAmount, setDonationAmount] = useState("1.00");
@@ -39,6 +46,50 @@ Email Guardian System`);
     });
   };
 
+  const revokeGmailMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", "/api/auth/gmail/revoke", { userId: user?.id });
+      return res.json();
+    },
+    onSuccess: () => {
+      toast({
+        title: "Gmail Access Revoked",
+        description: "Your Gmail account has been disconnected and access revoked.",
+      });
+      logout();
+      setLocation("/setup");
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to revoke Gmail access",
+        variant: "destructive",
+      });
+    }
+  });
+
+  const deleteAccountMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("DELETE", `/api/user/${user?.id}`);
+      return res.json();
+    },
+    onSuccess: () => {
+      toast({
+        title: "Account Deleted",
+        description: "Your account and all data have been permanently deleted.",
+      });
+      logout();
+      setLocation("/setup");
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to delete account",
+        variant: "destructive",
+      });
+    }
+  });
+
   const handleConnectGmail = () => {
     // This would trigger the Gmail OAuth flow
     window.location.href = "/api/auth/gmail";
@@ -51,7 +102,7 @@ Email Guardian System`);
       <main className="flex-1 ml-64">
         <Header 
           title="Settings" 
-          subtitle="Configure your email filtering and donation system"
+          subtitle={`Configure your email filtering and donation system • Connected: ${user?.email}`}
           gmailStatus={gmailConnected ? "connected" : "disconnected"}
         />
         
@@ -164,6 +215,61 @@ Email Guardian System`);
                   <p className="text-sm text-gray-500">Receive notifications for new donations and filtered emails</p>
                 </div>
                 <Switch checked={true} />
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Danger Zone */}
+          <Card className="border-red-200">
+            <CardHeader>
+              <CardTitle className="flex items-center space-x-2 text-red-600">
+                <AlertTriangle className="text-red-600" size={20} />
+                <span>Danger Zone</span>
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              <Alert className="border-orange-200 bg-orange-50">
+                <AlertTriangle className="h-4 w-4 text-orange-600" />
+                <AlertDescription className="text-orange-800">
+                  These actions will permanently affect your account and cannot be undone.
+                </AlertDescription>
+              </Alert>
+
+              <div className="space-y-4">
+                <div className="flex items-center justify-between p-4 border border-orange-200 rounded-lg bg-orange-50">
+                  <div>
+                    <h3 className="font-medium text-gray-900">Revoke Gmail Access</h3>
+                    <p className="text-sm text-gray-600">
+                      Disconnect your Gmail account and revoke all API permissions. This will stop email filtering immediately.
+                    </p>
+                  </div>
+                  <Button 
+                    variant="outline"
+                    onClick={() => revokeGmailMutation.mutate()}
+                    disabled={revokeGmailMutation.isPending}
+                    className="border-orange-300 text-orange-700 hover:bg-orange-100"
+                  >
+                    {revokeGmailMutation.isPending ? "Revoking..." : "Revoke Access"}
+                  </Button>
+                </div>
+
+                <div className="flex items-center justify-between p-4 border border-red-200 rounded-lg bg-red-50">
+                  <div>
+                    <h3 className="font-medium text-gray-900">Delete Account</h3>
+                    <p className="text-sm text-gray-600">
+                      Permanently delete your account, contacts, and all data. Gmail access will also be revoked.
+                    </p>
+                  </div>
+                  <Button 
+                    variant="destructive"
+                    onClick={() => deleteAccountMutation.mutate()}
+                    disabled={deleteAccountMutation.isPending}
+                    className="bg-red-600 hover:bg-red-700"
+                  >
+                    <UserX className="mr-2" size={16} />
+                    {deleteAccountMutation.isPending ? "Deleting..." : "Delete Account"}
+                  </Button>
+                </div>
               </div>
             </CardContent>
           </Card>

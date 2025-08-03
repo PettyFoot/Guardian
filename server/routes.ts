@@ -32,6 +32,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.delete("/api/user/:id", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const user = await storage.getUser(id);
+      
+      if (!user) {
+        return res.status(404).json({ message: "User not found" });
+      }
+
+      // Revoke Gmail tokens if they exist
+      if (user.gmailRefreshToken) {
+        try {
+          await gmailService.revokeTokens(user.gmailRefreshToken);
+        } catch (error: any) {
+          console.log('Google token revocation failed:', error.message);
+        }
+      }
+
+      // Delete user and all associated data (cascade will handle contacts, emails, etc.)
+      await storage.deleteUser(id);
+
+      res.json({ message: "User account deleted successfully" });
+    } catch (error: any) {
+      res.status(500).json({ message: "Error deleting user: " + error.message });
+    }
+  });
+
   // Gmail OAuth routes
   app.get("/api/auth/gmail", async (req, res) => {
     try {
@@ -39,6 +66,37 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json({ authUrl });
     } catch (error: any) {
       res.status(500).json({ message: "Error generating auth URL: " + error.message });
+    }
+  });
+
+  // Gmail revoke access
+  app.post("/api/auth/gmail/revoke", async (req, res) => {
+    try {
+      const { userId } = req.body;
+      
+      if (!userId) {
+        return res.status(400).json({ message: "User ID is required" });
+      }
+
+      const user = await storage.getUser(userId);
+      if (!user || !user.gmailRefreshToken) {
+        return res.status(404).json({ message: "User not found or no Gmail tokens" });
+      }
+
+      // Revoke the refresh token with Google
+      try {
+        await gmailService.revokeTokens(user.gmailRefreshToken);
+      } catch (error: any) {
+        console.log('Google token revocation failed:', error.message);
+        // Continue anyway to clear local tokens
+      }
+
+      // Clear Gmail tokens from database
+      await storage.updateUserGmailTokens(userId, "", "");
+
+      res.json({ message: "Gmail access revoked successfully" });
+    } catch (error: any) {
+      res.status(500).json({ message: "Error revoking Gmail access: " + error.message });
     }
   });
 

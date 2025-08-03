@@ -1,9 +1,11 @@
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { RefreshCw } from "lucide-react";
+import { RefreshCw, LogOut } from "lucide-react";
 import { useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/use-auth";
+import { useLocation } from "wouter";
 
 interface HeaderProps {
   title: string;
@@ -15,10 +17,12 @@ const CURRENT_USER_ID = "user-123";
 
 export function Header({ title, subtitle, gmailStatus }: HeaderProps) {
   const { toast } = useToast();
+  const { user, logout } = useAuth();
+  const [, setLocation] = useLocation();
 
   const syncMutation = useMutation({
     mutationFn: async () => {
-      await apiRequest("POST", "/api/process-emails", { userId: CURRENT_USER_ID });
+      await apiRequest("POST", "/api/process-emails", { userId: user?.id });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/dashboard/stats"] });
@@ -60,6 +64,17 @@ export function Header({ title, subtitle, gmailStatus }: HeaderProps) {
           >
             <RefreshCw className={`mr-2 ${syncMutation.isPending ? "animate-spin" : ""}`} size={16} />
             {syncMutation.isPending ? "Syncing..." : "Sync Now"}
+          </Button>
+          <Button 
+            variant="outline"
+            onClick={() => {
+              logout();
+              setLocation("/setup");
+            }}
+            className="text-gray-600 hover:text-gray-800"
+          >
+            <LogOut className="mr-2" size={16} />
+            Logout
           </Button>
         </div>
       </div>

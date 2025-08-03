@@ -47,6 +47,11 @@ export class GmailService {
     return credentials;
   }
 
+  async revokeTokens(refreshToken: string) {
+    this.oauth2Client.setCredentials({ refresh_token: refreshToken });
+    await this.oauth2Client.revokeCredentials();
+  }
+
   private getGmailClient(accessToken: string) {
     this.oauth2Client.setCredentials({ access_token: accessToken });
     return google.gmail({ version: 'v1', auth: this.oauth2Client });
