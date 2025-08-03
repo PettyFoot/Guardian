@@ -271,6 +271,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Email processing
   app.post("/api/process-emails", async (req, res) => {
     try {
+      console.log('Email processing request received:', req.body);
       const { userId } = req.body;
       
       if (!userId) {
@@ -278,12 +279,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const user = await storage.getUser(userId);
-      if (!user) {
-        return res.status(404).json({ message: "User not found" });
+      if (!user || !user.gmailToken) {
+        return res.status(404).json({ message: "User not found or Gmail not connected" });
       }
 
+      // Import EmailProcessor dynamically to avoid circular dependencies
+      const { EmailProcessor } = await import('./services/email-processor');
+      const emailProcessor = new EmailProcessor();
+      
+      console.log('Starting email processing for user:', user.email);
       await emailProcessor.processNewEmails(user);
-      res.json({ success: true });
+      console.log('Email processing completed');
+      
+      res.json({ success: true, message: "Email processing completed" });
     } catch (error: any) {
       res.status(500).json({ message: "Error processing emails: " + error.message });
     }

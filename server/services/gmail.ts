@@ -5,22 +5,17 @@ export class GmailService {
   private oauth2Client: OAuth2Client;
 
   constructor() {
-    // Determine the correct redirect URI based on environment
-    let redirectUri = 'http://localhost:5000/setup';
-    
-    if (process.env.REPLIT_DOMAINS) {
-      redirectUri = `https://${process.env.REPLIT_DOMAINS}/setup`;
-    } else if (process.env.REPLIT_DOMAIN) {
-      redirectUri = `https://${process.env.REPLIT_DOMAIN}/setup`;
-    } else if (process.env.GMAIL_REDIRECT_URI) {
-      redirectUri = process.env.GMAIL_REDIRECT_URI;
+    const clientId = process.env.GMAIL_CLIENT_ID;
+    const clientSecret = process.env.GMAIL_CLIENT_SECRET;
+    const redirectUri = process.env.OAUTH_REDIRECT_URI || 'http://localhost:5000/setup';
+
+    if (!clientId || !clientSecret) {
+      throw new Error('Gmail OAuth credentials not configured');
     }
-    
-    console.log('OAuth Redirect URI:', redirectUri);
-    
+
     this.oauth2Client = new OAuth2Client(
-      process.env.GMAIL_CLIENT_ID || "your-gmail-client-id",
-      process.env.GMAIL_CLIENT_SECRET || "your-gmail-client-secret", 
+      clientId,
+      clientSecret,
       redirectUri
     );
   }
@@ -30,7 +25,9 @@ export class GmailService {
       access_type: 'offline',
       scope: [
         'https://www.googleapis.com/auth/gmail.readonly',
-        'https://www.googleapis.com/auth/gmail.labels'
+        'https://www.googleapis.com/auth/gmail.labels',
+        'https://www.googleapis.com/auth/gmail.modify',
+        'https://www.googleapis.com/auth/gmail.send'
       ],
       prompt: 'consent'
     });
@@ -155,21 +152,29 @@ export class GmailService {
     });
   }
 
+  async removeFromInbox(accessToken: string, messageId: string) {
+    const gmail = this.getGmailClient(accessToken);
+    await gmail.users.messages.modify({
+      userId: 'me',
+      id: messageId,
+      requestBody: {
+        removeLabelIds: ['INBOX']
+      }
+    });
+  }
+
   async sendEmail(accessToken: string, to: string, subject: string, body: string) {
     const gmail = this.getGmailClient(accessToken);
     
     const message = [
       `To: ${to}`,
       `Subject: ${subject}`,
+      'Content-Type: text/plain; charset=utf-8',
       '',
       body
     ].join('\n');
 
-    const encodedMessage = Buffer.from(message)
-      .toString('base64')
-      .replace(/\+/g, '-')
-      .replace(/\//g, '_')
-      .replace(/=+$/, '');
+    const encodedMessage = Buffer.from(message).toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 
     await gmail.users.messages.send({
       userId: 'me',
@@ -179,14 +184,14 @@ export class GmailService {
     });
   }
 
-  extractEmailAddress(header: string): string {
-    const emailMatch = header.match(/<([^>]+)>/);
-    return emailMatch ? emailMatch[1] : header;
-  }
-
   getHeaderValue(headers: any[], name: string): string {
     const header = headers.find(h => h.name.toLowerCase() === name.toLowerCase());
-    return header ? header.value : '';
+    return header?.value || '';
+  }
+
+  extractEmailAddress(fromHeader: string): string {
+    const match = fromHeader.match(/<(.+?)>/) || fromHeader.match(/(\S+@\S+)/);
+    return match ? match[1] : fromHeader;
   }
 }
 

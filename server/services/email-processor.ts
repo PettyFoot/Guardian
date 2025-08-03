@@ -92,8 +92,11 @@ export class EmailProcessor {
       await gmailService.addLabel(user.gmailToken!, messageId, pendingLabel.id);
     }
 
-    // Send auto-reply with donation link
+    // Send auto-reply with donation link  
     await this.sendDonationRequest(user, senderEmail, subject, url);
+    
+    // Remove from inbox since it's now pending donation
+    await gmailService.removeFromInbox(user.gmailToken!, messageId);
 
     // Update stats
     const today = new Date();
@@ -125,6 +128,8 @@ Thank you for understanding!
 Best regards,
 Email Guardian System
     `.trim();
+    
+    await gmailService.sendEmail(user.gmailToken!, senderEmail, subject, body);
 
     await gmailService.sendEmail(user.gmailToken!, senderEmail, subject, body);
   }
