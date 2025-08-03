@@ -5,10 +5,19 @@ export class GmailService {
   private oauth2Client: OAuth2Client;
 
   constructor() {
+    // Determine the correct redirect URI based on environment
+    let redirectUri = 'http://localhost:5000/setup';
+    
+    if (process.env.REPLIT_DOMAIN) {
+      redirectUri = `https://${process.env.REPLIT_DOMAIN}/setup`;
+    } else if (process.env.GMAIL_REDIRECT_URI) {
+      redirectUri = process.env.GMAIL_REDIRECT_URI;
+    }
+    
     this.oauth2Client = new OAuth2Client(
       process.env.GMAIL_CLIENT_ID || "your-gmail-client-id",
       process.env.GMAIL_CLIENT_SECRET || "your-gmail-client-secret", 
-      process.env.GMAIL_REDIRECT_URI || `${process.env.FRONTEND_URL || 'http://localhost:5000'}/setup`
+      redirectUri
     );
   }
 
