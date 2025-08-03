@@ -56,8 +56,20 @@ export class GmailService {
     const gmail = this.getGmailClient(accessToken);
     
     const labels = [
-      { name: 'Email Guardian/Pending Donation', color: { backgroundColor: '#ffa500' } },
-      { name: 'Email Guardian/Known Contacts', color: { backgroundColor: '#4caf50' } }
+      { 
+        name: 'Email Guardian/Pending Donation', 
+        color: { 
+          backgroundColor: '#ffa500',
+          textColor: '#000000'
+        } 
+      },
+      { 
+        name: 'Email Guardian/Known Contacts', 
+        color: { 
+          backgroundColor: '#4caf50',
+          textColor: '#ffffff'
+        } 
+      }
     ];
 
     const createdLabels = [];

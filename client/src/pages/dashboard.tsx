@@ -68,7 +68,7 @@ export default function Dashboard() {
       <main className="flex-1 ml-64">
         <Header 
           title="Dashboard" 
-          subtitle="Monitor your email filtering and donation system"
+          subtitle={`Monitor your email filtering and donation system • Connected: ${user?.email}`}
           gmailStatus="connected"
         />
         

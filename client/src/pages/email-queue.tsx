@@ -6,16 +6,18 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { apiRequest } from "@/lib/queryClient";
-
-const CURRENT_USER_ID = "user-123";
+import { useAuth } from "@/hooks/use-auth";
 
 export default function EmailQueue() {
+  const { user } = useAuth();
+  
   const { data: pendingEmails, isLoading } = useQuery({
-    queryKey: ["/api/pending-emails"],
+    queryKey: ["/api/pending-emails", user?.id],
     queryFn: async () => {
-      const res = await apiRequest("GET", `/api/pending-emails?userId=${CURRENT_USER_ID}`);
+      const res = await apiRequest("GET", `/api/pending-emails?userId=${user?.id}`);
       return res.json();
-    }
+    },
+    enabled: !!user?.id
   });
 
   const pendingCount = pendingEmails?.filter((e: any) => e.status === 'pending')?.length || 0;
@@ -29,7 +31,7 @@ export default function EmailQueue() {
       <main className="flex-1 ml-64">
         <Header 
           title="Email Queue" 
-          subtitle="Manage pending emails and donation requests"
+          subtitle={`Manage pending emails and donation requests • Connected: ${user?.email}`}
           gmailStatus="connected"
         />
         

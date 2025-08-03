@@ -12,6 +12,41 @@ import { useLocation } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
 import { Shield, Mail, CheckCircle, AlertCircle, ArrowRight } from "lucide-react";
 
+function ExistingUserLogin() {
+  const { login } = useAuth();
+  const [, setLocation] = useLocation();
+  
+  const { data: users } = useQuery({
+    queryKey: ['/api/users'],
+    queryFn: async () => {
+      const res = await apiRequest("GET", "/api/users");
+      return res.json();
+    },
+  });
+
+  if (!users || users.length === 0) {
+    return null;
+  }
+
+  return (
+    <div className="space-y-2">
+      {users.map((user: any) => (
+        <Button 
+          key={user.id}
+          variant="ghost"
+          onClick={() => {
+            login(user);
+            setLocation("/");
+          }}
+          className="text-sm w-full justify-start"
+        >
+          Continue as {user.email}
+        </Button>
+      ))}
+    </div>
+  );
+}
+
 export default function Setup() {
   const [, setLocation] = useLocation();
   const [userEmail, setUserEmail] = useState("");
@@ -179,22 +214,7 @@ export default function Setup() {
                   Try Demo Mode Instead
                 </Button>
                 
-                <Button 
-                  variant="ghost"
-                  onClick={() => {
-                    // Quick login for existing user
-                    login({
-                      id: "f151d557-ed89-46ff-9341-b412b38aee24",
-                      email: "louis@correra.org",
-                      gmailAccessToken: "token", 
-                      gmailRefreshToken: "refresh"
-                    });
-                    setLocation("/");
-                  }}
-                  className="text-sm w-full"
-                >
-                  Continue as louis@correra.org
-                </Button>
+                <ExistingUserLogin />
               </div>
             </div>
           </CardContent>
