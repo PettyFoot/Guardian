@@ -43,6 +43,10 @@ export default function Setup() {
   const handleGmailCallback = useMutation({
     mutationFn: async ({ code, email }: { code: string; email: string }) => {
       const res = await apiRequest("POST", "/api/auth/gmail/callback", { code, email });
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.message || 'Authentication failed');
+      }
       return res.json();
     },
     onSuccess: (data) => {
@@ -54,6 +58,7 @@ export default function Setup() {
       setLocation("/");
     },
     onError: (error: any) => {
+      console.error('Gmail callback error:', error);
       toast({
         title: "Authentication Failed",
         description: error.message || "Failed to connect Gmail account",
@@ -165,13 +170,30 @@ export default function Setup() {
                 )}
               </Button>
 
-              <div className="text-center mt-4">
+              <div className="text-center mt-4 space-y-2">
                 <Button 
                   variant="outline"
                   onClick={() => setLocation("/demo")}
-                  className="text-sm"
+                  className="text-sm w-full"
                 >
                   Try Demo Mode Instead
+                </Button>
+                
+                <Button 
+                  variant="ghost"
+                  onClick={() => {
+                    // Quick login for existing user
+                    login({
+                      id: "f151d557-ed89-46ff-9341-b412b38aee24",
+                      email: "louis@correra.org",
+                      gmailAccessToken: "token", 
+                      gmailRefreshToken: "refresh"
+                    });
+                    setLocation("/");
+                  }}
+                  className="text-sm w-full"
+                >
+                  Continue as louis@correra.org
                 </Button>
               </div>
             </div>
