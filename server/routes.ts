@@ -35,9 +35,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/auth/gmail/callback", async (req, res) => {
     try {
+      console.log('Gmail OAuth callback received:', req.body);
       const { code, email } = req.body;
       
       if (!code || !email) {
+        console.log('Missing code or email in callback');
         return res.status(400).json({ message: "Code and email are required" });
       }
 
