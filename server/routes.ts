@@ -43,25 +43,38 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "Code and email are required" });
       }
 
+      console.log('Getting tokens from Gmail...');
       const tokens = await gmailService.getTokens(code);
+      console.log('Tokens received:', { hasAccessToken: !!tokens.access_token, hasRefreshToken: !!tokens.refresh_token });
       
       // Create or update user
+      console.log('Looking for existing user with email:', email);
       let user = await storage.getUserByEmail(email);
+      
       if (!user) {
+        console.log('Creating new user...');
         user = await storage.createUser({ email });
+        console.log('User created:', user.id);
+      } else {
+        console.log('Found existing user:', user.id);
       }
 
       if (tokens.access_token && tokens.refresh_token) {
+        console.log('Updating user Gmail tokens...');
         user = await storage.updateUserGmailTokens(user.id, tokens.access_token, tokens.refresh_token);
+        console.log('Tokens updated successfully');
       }
 
       // Create Gmail labels
       if (tokens.access_token) {
+        console.log('Creating Gmail labels...');
         await gmailService.createLabels(tokens.access_token);
+        console.log('Labels created successfully');
       }
 
       res.json({ user, tokens });
     } catch (error: any) {
+      console.error('Gmail callback error:', error);
       res.status(500).json({ message: "Error handling Gmail callback: " + error.message });
     }
   });
