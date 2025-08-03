@@ -8,11 +8,15 @@ export class GmailService {
     // Determine the correct redirect URI based on environment
     let redirectUri = 'http://localhost:5000/setup';
     
-    if (process.env.REPLIT_DOMAIN) {
+    if (process.env.REPLIT_DOMAINS) {
+      redirectUri = `https://${process.env.REPLIT_DOMAINS}/setup`;
+    } else if (process.env.REPLIT_DOMAIN) {
       redirectUri = `https://${process.env.REPLIT_DOMAIN}/setup`;
     } else if (process.env.GMAIL_REDIRECT_URI) {
       redirectUri = process.env.GMAIL_REDIRECT_URI;
     }
+    
+    console.log('OAuth Redirect URI:', redirectUri);
     
     this.oauth2Client = new OAuth2Client(
       process.env.GMAIL_CLIENT_ID || "your-gmail-client-id",
@@ -26,9 +30,9 @@ export class GmailService {
       access_type: 'offline',
       scope: [
         'https://www.googleapis.com/auth/gmail.readonly',
-        'https://www.googleapis.com/auth/gmail.modify',
         'https://www.googleapis.com/auth/gmail.labels'
       ],
+      prompt: 'consent'
     });
   }
 
