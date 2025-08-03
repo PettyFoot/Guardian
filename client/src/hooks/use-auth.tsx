@@ -54,7 +54,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     localStorage.removeItem('user_id');
   };
 
-  const isAuthenticated = !!user && !!user.gmailAccessToken;
+  const isAuthenticated = !!user;
   const isLoading = !isInitialized;
 
   return (

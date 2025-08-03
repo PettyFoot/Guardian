@@ -35,7 +35,13 @@ function ExistingUserLogin() {
           key={user.id}
           variant="ghost"
           onClick={() => {
-            login(user);
+            console.log('Logging in user:', user);
+            login({
+              id: user.id,
+              email: user.email,
+              gmailAccessToken: user.gmailToken,
+              gmailRefreshToken: user.gmailRefreshToken
+            });
             setLocation("/");
           }}
           className="text-sm w-full justify-start"
