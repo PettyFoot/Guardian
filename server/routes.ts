@@ -297,22 +297,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Stripe webhook
+  // Placeholder for future Stripe webhook (disabled for now)
   app.post("/api/webhooks/stripe", async (req, res) => {
-    const signature = req.headers['stripe-signature'] as string;
-    
-    try {
-      const event = await stripeService.constructEvent(req.body, signature);
-      
-      if (event.type === 'checkout.session.completed') {
-        const session = event.data.object as any;
-        await emailProcessor.processDonationComplete(session.id);
-      }
-      
-      res.json({ received: true });
-    } catch (error: any) {
-      res.status(400).json({ message: "Webhook error: " + error.message });
-    }
+    res.json({ message: "Stripe webhooks not configured yet" });
   });
 
   const httpServer = createServer(app);

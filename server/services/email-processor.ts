@@ -1,6 +1,5 @@
 import { storage } from '../storage';
 import { gmailService } from './gmail';
-import { stripeService } from './stripe';
 import type { User } from '@shared/schema';
 
 export class EmailProcessor {
@@ -16,6 +15,8 @@ export class EmailProcessor {
         'is:unread -label:spam',
         20
       );
+
+      console.log(`Found ${messages.length} unread messages for user ${user.email}`);
 
       for (const message of messages) {
         if (!message.id) continue;
@@ -49,10 +50,13 @@ export class EmailProcessor {
     const subject = gmailService.getHeaderValue(headers, 'Subject');
     const snippet = message.snippet || '';
 
+    console.log(`Processing email from: ${senderEmail}, subject: ${subject}`);
+
     // Check if sender is whitelisted
     const isWhitelisted = await storage.isEmailWhitelisted(user.id, senderEmail);
     
     if (isWhitelisted) {
+      console.log(`Email from ${senderEmail} is whitelisted, keeping in inbox`);
       // Email is from known contact, ensure it's in inbox
       await gmailService.moveToInbox(user.gmailToken!, messageId);
       return;
@@ -61,8 +65,11 @@ export class EmailProcessor {
     // Check if we've already processed this email
     const existingPendingEmail = await storage.getPendingEmailByGmailId(user.id, messageId);
     if (existingPendingEmail) {
+      console.log(`Email from ${senderEmail} already processed`);
       return; // Already processed
     }
+
+    console.log(`Filtering email from unknown sender: ${senderEmail}`);
 
     // Create pending email record
     const pendingEmail = await storage.createPendingEmail({
@@ -75,14 +82,8 @@ export class EmailProcessor {
       status: 'pending'
     });
 
-    // Create donation checkout session
-    const { sessionId, url } = await stripeService.createCheckoutSession(
-      senderEmail, 
-      pendingEmail.id
-    );
-
-    // Update pending email with session info
-    await storage.updatePendingEmailDonationLink(pendingEmail.id, sessionId);
+    // Update pending email status
+    await storage.updatePendingEmailDonationLink(pendingEmail.id, 'manual-request');
 
     // Add label to Gmail message
     const labels = await gmailService.getLabels(user.gmailToken!);
@@ -92,8 +93,9 @@ export class EmailProcessor {
       await gmailService.addLabel(user.gmailToken!, messageId, pendingLabel.id);
     }
 
-    // Send auto-reply with donation link  
-    await this.sendDonationRequest(user, senderEmail, subject, url);
+    // Send auto-reply with donation request
+    const donationUrl = `Please reply to this email to confirm you've made a $1 donation to access this inbox.`;
+    await this.sendDonationRequest(user, senderEmail, subject, donationUrl);
     
     // Remove from inbox since it's now pending donation
     await gmailService.removeFromInbox(user.gmailToken!, messageId);
@@ -108,6 +110,8 @@ export class EmailProcessor {
     await storage.createOrUpdateEmailStats(user.id, today, {
       emailsFiltered: (currentFiltered + 1).toString()
     });
+
+    console.log(`Successfully filtered email from ${senderEmail} and sent auto-reply`);
   }
 
   private async sendDonationRequest(user: User, senderEmail: string, originalSubject: string, donationUrl: string) {
@@ -119,96 +123,78 @@ Thank you for your email. To help manage my inbox and reduce spam, I use an emai
 
 This one-time payment grants you permanent access to my inbox for future emails.
 
-Please complete your donation here: ${donationUrl}
+To complete your donation and have your email delivered:
+1. Send a $1 donation via PayPal, Venmo, or your preferred method
+2. Reply to this email confirming you've made the donation
+3. Your original email will then be delivered to my inbox
+4. You'll be added to my known contacts list for future emails
 
-Once your donation is confirmed, your original email will be delivered to my inbox and you'll be added to my known contacts list.
+Payment methods:
+- PayPal: [Add your PayPal email]
+- Venmo: [Add your Venmo username] 
+- Other: Contact me for alternative payment methods
 
-Thank you for understanding!
+Thank you for understanding this filtering system helps reduce spam!
 
 Best regards,
 Email Guardian System
     `.trim();
     
     await gmailService.sendEmail(user.gmailToken!, senderEmail, subject, body);
-
-    await gmailService.sendEmail(user.gmailToken!, senderEmail, subject, body);
   }
 
-  async processDonationComplete(sessionId: string) {
-    const session = await stripeService.getSession(sessionId);
+  async processDonationComplete(senderEmail: string, userId: string) {
+    // Manual donation processing (for when payments are confirmed manually)
     
-    if (session.payment_status !== 'paid') {
-      return;
-    }
-
-    const senderEmail = session.metadata?.sender_email;
-    const pendingEmailId = session.metadata?.pending_email_id;
-
-    if (!senderEmail || !pendingEmailId) {
-      throw new Error('Missing metadata in Stripe session');
-    }
-
-    // Find the pending email
-    const pendingEmail = await storage.getPendingEmails(session.customer_details?.email || '');
-    const targetEmail = pendingEmail.find(e => e.id === pendingEmailId);
-    
-    if (!targetEmail) {
-      throw new Error('Pending email not found');
-    }
-
-    // Create donation record
-    await storage.createDonation({
-      userId: targetEmail.userId,
-      pendingEmailId: targetEmail.id,
-      stripeSessionId: sessionId,
-      amount: (session.amount_total! / 100).toString(),
-      senderEmail: senderEmail,
-      status: 'completed'
-    });
-
-    // Add sender to contacts
-    const existingContact = await storage.getContactByEmail(targetEmail.userId, senderEmail);
+    // Add sender to contacts (whitelist them)
+    const existingContact = await storage.getContactByEmail(userId, senderEmail);
     if (!existingContact) {
       await storage.createContact({
-        userId: targetEmail.userId,
+        userId: userId,
         email: senderEmail,
         isWhitelisted: true
       });
     }
 
     // Get user for Gmail operations
-    const user = await storage.getUser(targetEmail.userId);
+    const user = await storage.getUser(userId);
     if (!user?.gmailToken) {
       throw new Error('User Gmail token not found');
     }
 
-    // Move email to inbox and add known contacts label
-    await gmailService.moveToInbox(user.gmailToken, targetEmail.gmailMessageId);
-    
-    const labels = await gmailService.getLabels(user.gmailToken);
-    const knownContactsLabel = labels.find(l => l.name === 'Email Guardian/Known Contacts');
-    const pendingLabel = labels.find(l => l.name === 'Email Guardian/Pending Donation');
-    
-    if (knownContactsLabel?.id) {
-      await gmailService.addLabel(user.gmailToken, targetEmail.gmailMessageId, knownContactsLabel.id);
-    }
-    
-    if (pendingLabel?.id) {
-      await gmailService.removeLabel(user.gmailToken, targetEmail.gmailMessageId, pendingLabel.id);
-    }
+    // Find pending emails from this sender
+    const pendingEmails = await storage.getPendingEmails(userId);
+    const senderPendingEmails = pendingEmails.filter(e => e.sender === senderEmail);
 
-    // Update pending email status
-    await storage.updatePendingEmailStatus(targetEmail.id, 'released');
+    // Move all emails from this sender to inbox
+    for (const pendingEmail of senderPendingEmails) {
+      await gmailService.moveToInbox(user.gmailToken, pendingEmail.gmailMessageId);
+      
+      const labels = await gmailService.getLabels(user.gmailToken);
+      const knownContactsLabel = labels.find(l => l.name === 'Email Guardian/Known Contacts');
+      const pendingLabel = labels.find(l => l.name === 'Email Guardian/Pending Donation');
+      
+      if (knownContactsLabel?.id) {
+        await gmailService.addLabel(user.gmailToken, pendingEmail.gmailMessageId, knownContactsLabel.id);
+      }
+      
+      if (pendingLabel?.id) {
+        await gmailService.removeLabel(user.gmailToken, pendingEmail.gmailMessageId, pendingLabel.id);
+      }
+
+      // Update pending email status
+      await storage.updatePendingEmailStatus(pendingEmail.id, 'released');
+    }
 
     // Update stats
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     
-    const stats = await storage.getEmailStats(targetEmail.userId, today);
+    const stats = await storage.getEmailStats(userId, today);
     const currentDonations = stats ? parseFloat(stats.donationsReceived || "0") : 0;
     
-    await storage.createOrUpdateEmailStats(targetEmail.userId, today, {
-      donationsReceived: (currentDonations + parseFloat((session.amount_total! / 100).toString())).toString()
+    await storage.createOrUpdateEmailStats(userId, today, {
+      donationsReceived: (currentDonations + 1.00).toString()
     });
   }
 }
