@@ -12,89 +12,7 @@ import { useLocation } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
 import { Shield, Mail, CheckCircle, AlertCircle, ArrowRight, RefreshCw } from "lucide-react";
 
-function ExistingUserLogin() {
-  const { login, user: currentUser } = useAuth();
-  const [, setLocation] = useLocation();
-  const { toast } = useToast();
-  
-  // Only show user list if no one is currently logged in
-  const { data: users, refetch, isLoading } = useQuery({
-    queryKey: ['/api/users'],
-    queryFn: async () => {
-      if (currentUser) return []; // Don't fetch if someone is logged in
-      const res = await apiRequest("GET", "/api/users");
-      return res.json();
-    },
-    enabled: !currentUser, // Only run query if no current user
-  });
-
-  const handleUserLogin = async (user: any) => {
-    try {
-      console.log('Attempting to login user:', user);
-      
-      // First verify the user still exists
-      const verifyRes = await apiRequest("GET", `/api/user/${user.id}`);
-      if (!verifyRes.ok) {
-        toast({
-          title: "Account Not Found",
-          description: "This account has been deleted. Please create a new account.",
-          variant: "destructive",
-        });
-        // Refresh the user list to remove deleted accounts
-        refetch();
-        return;
-      }
-      
-      login({
-        id: user.id,
-        email: user.email,
-        gmailAccessToken: user.gmailToken,
-        gmailRefreshToken: user.gmailRefreshToken
-      });
-      setLocation("/");
-    } catch (error: any) {
-      console.error('Login error:', error);
-      toast({
-        title: "Login Failed",
-        description: "Account may have been deleted. Please create a new account.",
-        variant: "destructive",
-      });
-      refetch();
-    }
-  };
-
-  // Don't show existing users if someone is currently logged in
-  if (currentUser || !users || users.length === 0) {
-    return null;
-  }
-
-  return (
-    <div className="space-y-2">
-      <div className="flex items-center justify-between mb-2">
-        <h3 className="text-sm font-medium text-gray-700">Existing Accounts</h3>
-        <Button
-          variant="ghost" 
-          size="sm"
-          onClick={() => refetch()}
-          disabled={isLoading}
-          className="text-xs h-6 px-2"
-        >
-          <RefreshCw className={`h-3 w-3 ${isLoading ? 'animate-spin' : ''}`} />
-        </Button>
-      </div>
-      {users.map((user: any) => (
-        <Button 
-          key={user.id}
-          variant="ghost"
-          onClick={() => handleUserLogin(user)}
-          className="text-sm w-full justify-start"
-        >
-          Continue as {user.email}
-        </Button>
-      ))}
-    </div>
-  );
-}
+// Existing user login functionality moved to separate sign-in page
 
 export default function Setup() {
   const [, setLocation] = useLocation();
@@ -263,7 +181,19 @@ export default function Setup() {
                   Try Demo Mode Instead
                 </Button>
                 
-                <ExistingUserLogin />
+                <div className="text-center">
+                  <p className="text-sm text-gray-600">
+                    Already have an account?{" "}
+                    <Button
+                      variant="link"
+                      className="p-0 h-auto text-blue-600 hover:text-blue-800"
+                      onClick={() => setLocation("/signin")}
+                      data-testid="link-signin"
+                    >
+                      Sign in here
+                    </Button>
+                  </p>
+                </div>
               </div>
             </div>
           </CardContent>

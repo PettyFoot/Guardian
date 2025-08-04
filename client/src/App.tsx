@@ -10,6 +10,7 @@ import Contacts from "@/pages/contacts";
 import Donations from "@/pages/donations";
 import Settings from "@/pages/settings";
 import Setup from "@/pages/setup";
+import SignIn from "@/pages/signin";
 import Demo from "@/pages/demo";
 import NotFound from "@/pages/not-found";
 
@@ -45,6 +46,7 @@ function Router() {
   return (
     <Switch>
       <Route path="/setup" component={Setup} />
+      <Route path="/signin" component={SignIn} />
       <Route path="/demo" component={Demo} />
       <Route path="/">
         {isAuthenticated ? <Dashboard /> : <Redirect to="/setup" />}
