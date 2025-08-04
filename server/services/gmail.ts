@@ -7,7 +7,14 @@ export class GmailService {
   constructor() {
     const clientId = process.env.GMAIL_CLIENT_ID;
     const clientSecret = process.env.GMAIL_CLIENT_SECRET;
-    const redirectUri = process.env.OAUTH_REDIRECT_URI || 'http://localhost:5000/setup';
+    
+    // Use the Replit domain for OAuth redirect
+    const replitDomain = process.env.REPLIT_DOMAINS?.split(',')[0];
+    const redirectUri = replitDomain 
+      ? `https://${replitDomain}/setup`
+      : process.env.OAUTH_REDIRECT_URI || 'http://localhost:5000/setup';
+
+    console.log('OAuth Redirect URI:', redirectUri);
 
     if (!clientId || !clientSecret) {
       throw new Error('Gmail OAuth credentials not configured');
