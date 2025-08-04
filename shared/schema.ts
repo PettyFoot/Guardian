@@ -10,6 +10,8 @@ export const users = pgTable("users", {
   gmailToken: text("gmail_token"),
   gmailRefreshToken: text("gmail_refresh_token"),
   stripeCustomerId: text("stripe_customer_id"),
+  emailCheckInterval: decimal("email_check_interval", { precision: 5, scale: 1 }).default("1.0"), // in minutes
+  lastEmailCheck: timestamp("last_email_check"),
   createdAt: timestamp("created_at").defaultNow(),
 });
 

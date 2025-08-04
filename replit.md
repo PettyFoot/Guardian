@@ -17,14 +17,25 @@ The system uses React for the frontend with shadcn/ui components, Express.js for
 - Stripe payment processing service (optional, configurable)
 - Complete UI for dashboard, email queue, contacts, donations, and settings
 - Setup page for initial Gmail authentication
+- **NEW:** Configurable email check intervals (30 seconds to 1 hour)
+- **NEW:** Historical email processing that checks emails since last check time
+- **NEW:** User settings for email processing frequency with API usage information
 
 ⏳ **Pending Setup Requirements:**
 - Gmail OAuth credentials (GMAIL_CLIENT_ID, GMAIL_CLIENT_SECRET, GMAIL_REDIRECT_URI)
 - Stripe API keys for payment processing (STRIPE_SECRET_KEY, VITE_STRIPE_PUBLIC_KEY)
-- Background email processing scheduler implementation
 
 🎯 **Ready for Use:** 
 The application is fully functional and ready for deployment once API credentials are provided.
+
+## Recent Changes (January 4, 2025)
+- **Email Processing Improvements:**
+  - Changed default email check interval from 5 minutes to 1 minute
+  - Added user-configurable email check intervals (30 seconds to 1 hour)
+  - Enhanced email processor to check emails since last check time (not just unread)
+  - Added API endpoint for updating email check intervals
+  - Updated scheduler to check every 30 seconds for more responsive per-user intervals
+  - Added database fields for storing last check time and user preferences
 
 ## User Preferences
 

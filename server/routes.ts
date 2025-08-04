@@ -19,15 +19,26 @@ async function startAutoProcessing() {
       
       for (const user of users) {
         if (user.gmailToken) {
-          const { EmailProcessor } = await import('./services/email-processor');
-          const emailProcessor = new EmailProcessor();
-          await emailProcessor.processNewEmails(user);
+          // Check if it's time to process emails for this user
+          const intervalMinutes = parseFloat(user.emailCheckInterval || "1.0");
+          const lastCheckTime = user.lastEmailCheck ? new Date(user.lastEmailCheck) : new Date(0);
+          const timeSinceLastCheck = Date.now() - lastCheckTime.getTime();
+          const intervalMs = intervalMinutes * 60 * 1000;
+          
+          if (timeSinceLastCheck >= intervalMs) {
+            const { EmailProcessor } = await import('./services/email-processor');
+            const emailProcessor = new EmailProcessor();
+            await emailProcessor.processNewEmails(user);
+            
+            // Update last check time
+            await storage.updateUserLastEmailCheck(user.id, new Date());
+          }
         }
       }
     } catch (error: any) {
       console.error('Auto-processing error:', error.message);
     }
-  }, 5 * 60 * 1000); // Run every 5 minutes
+  }, 30 * 1000); // Check every 30 seconds for more responsive scheduling
 }
 
 export async function registerRoutes(app: Express): Promise<Server> {
@@ -89,6 +100,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error: any) {
       console.error('Error in delete user endpoint:', error);
       res.status(500).json({ message: "Error deleting user: " + error.message });
+    }
+  });
+
+  // User settings routes
+  app.patch("/api/user/:id/email-check-interval", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { intervalMinutes } = req.body;
+      
+      if (!intervalMinutes || intervalMinutes < 0.5 || intervalMinutes > 60) {
+        return res.status(400).json({ message: "Interval must be between 0.5 and 60 minutes" });
+      }
+      
+      const user = await storage.updateUserEmailCheckInterval(id, intervalMinutes);
+      res.json({ message: "Email check interval updated", user });
+    } catch (error: any) {
+      res.status(500).json({ message: "Error updating email check interval: " + error.message });
     }
   });
 

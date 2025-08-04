@@ -9,14 +9,22 @@ export class EmailProcessor {
     }
 
     try {
-      // Get recent unread emails
+      // Calculate time range based on last check and current interval
+      const intervalMinutes = parseFloat(user.emailCheckInterval || "1.0");
+      const lastCheckTime = user.lastEmailCheck ? new Date(user.lastEmailCheck) : new Date(Date.now() - 24 * 60 * 60 * 1000); // Default to 24h ago if never checked
+      
+      // Format date for Gmail search (YYYY/MM/DD format)
+      const after = lastCheckTime.toISOString().split('T')[0].replace(/-/g, '/');
+      
+      // Get emails from the last check time, including unread and already read emails that might have been missed
+      const query = `after:${after} -label:spam`;
       const messages = await gmailService.getMessages(
         user.gmailToken,
-        'is:unread -label:spam',
-        20
+        query,
+        50 // Increased limit to catch more emails during busy periods
       );
 
-      console.log(`Found ${messages.length} unread messages for user ${user.email}`);
+      console.log(`Found ${messages.length} messages since ${after} for user ${user.email}`);
 
       for (const message of messages) {
         if (!message.id) continue;

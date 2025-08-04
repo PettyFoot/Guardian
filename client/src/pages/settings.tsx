@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Sidebar } from "@/components/layout/sidebar";
 import { Header } from "@/components/layout/header";
 import { Button } from "@/components/ui/button";
@@ -9,12 +9,13 @@ import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
 import { useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useLocation } from "wouter";
-import { Save, Mail, Shield, DollarSign, Bell, AlertTriangle, UserX } from "lucide-react";
+import { Save, Mail, Shield, DollarSign, Bell, AlertTriangle, UserX, Clock } from "lucide-react";
 
 export default function Settings() {
   const { user, logout } = useAuth();
@@ -22,6 +23,7 @@ export default function Settings() {
   const [gmailConnected, setGmailConnected] = useState(true);
   const [autoProcessing, setAutoProcessing] = useState(true);
   const [donationAmount, setDonationAmount] = useState("1.00");
+  const [emailCheckInterval, setEmailCheckInterval] = useState("1.0");
   const [autoReplyTemplate, setAutoReplyTemplate] = useState(`Hello,
 
 Thank you for your email. To help manage my inbox and reduce spam, I use an email filtering system that requires a small $1 donation for unknown senders to ensure your message reaches me.
@@ -39,11 +41,52 @@ Email Guardian System`);
 
   const { toast } = useToast();
 
+  // Load user's current email check interval
+  useEffect(() => {
+    if ((user as any)?.emailCheckInterval) {
+      setEmailCheckInterval((user as any).emailCheckInterval);
+    }
+  }, [user]);
+
+  const updateIntervalMutation = useMutation({
+    mutationFn: async (intervalMinutes: number) => {
+      const res = await apiRequest("PATCH", `/api/user/${user?.id}/email-check-interval`, { 
+        intervalMinutes 
+      });
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.message || 'Failed to update email check interval');
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      toast({
+        title: "Email Check Interval Updated",
+        description: "Your email check frequency has been updated successfully.",
+      });
+      // Refresh user data
+      queryClient.invalidateQueries({ queryKey: [`/api/user/${user?.id}`] });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to update email check interval",
+        variant: "destructive",
+      });
+    }
+  });
+
   const handleSave = () => {
     toast({
       title: "Settings Saved",
       description: "Your configuration has been updated successfully.",
     });
+  };
+
+  const handleIntervalChange = (value: string) => {
+    setEmailCheckInterval(value);
+    const intervalMinutes = parseFloat(value);
+    updateIntervalMutation.mutate(intervalMinutes);
   };
 
   const revokeGmailMutation = useMutation({
@@ -156,10 +199,49 @@ Email Guardian System`);
               <div className="flex items-center justify-between">
                 <div>
                   <Label className="text-base font-medium">Auto-Process Emails (Always On)</Label>
-                  <p className="text-sm text-gray-500">System automatically processes emails every 5 minutes</p>
+                  <p className="text-sm text-gray-500">System automatically processes emails based on your configured interval</p>
                 </div>
                 <Switch checked={true} disabled={true} />
               </div>
+
+              <div className="flex items-center justify-between">
+                <div>
+                  <Label className="text-base font-medium flex items-center space-x-2">
+                    <Clock size={16} />
+                    <span>Email Check Interval</span>
+                  </Label>
+                  <p className="text-sm text-gray-500">How often to check for new emails (lower values increase API usage)</p>
+                </div>
+                <div className="w-48">
+                  <Select value={emailCheckInterval} onValueChange={handleIntervalChange} disabled={updateIntervalMutation.isPending}>
+                    <SelectTrigger data-testid="select-email-interval">
+                      <SelectValue placeholder="Select interval" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="0.5">30 seconds</SelectItem>
+                      <SelectItem value="1.0">1 minute</SelectItem>
+                      <SelectItem value="2.0">2 minutes</SelectItem>
+                      <SelectItem value="5.0">5 minutes</SelectItem>
+                      <SelectItem value="10.0">10 minutes</SelectItem>
+                      <SelectItem value="15.0">15 minutes</SelectItem>
+                      <SelectItem value="30.0">30 minutes</SelectItem>
+                      <SelectItem value="60.0">1 hour</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  {updateIntervalMutation.isPending && (
+                    <p className="text-sm text-gray-500 mt-1">Updating...</p>
+                  )}
+                </div>
+              </div>
+
+              <Alert>
+                <AlertTriangle className="h-4 w-4" />
+                <AlertDescription>
+                  <strong>API Usage Notice:</strong> Shorter check intervals (30 seconds - 2 minutes) will increase Gmail API usage. 
+                  Google provides a free quota of 1 billion API calls per day, so this shouldn't be a concern for normal usage. 
+                  The system efficiently checks only emails newer than the last check time.
+                </AlertDescription>
+              </Alert>
             </CardContent>
           </Card>
 

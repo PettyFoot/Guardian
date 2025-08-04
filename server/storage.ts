@@ -17,6 +17,8 @@ export interface IStorage {
   createUser(user: InsertUser): Promise<User>;
   updateUserGmailTokens(id: string, token: string, refreshToken: string): Promise<User>;
   updateUserStripeCustomerId(id: string, customerId: string): Promise<User>;
+  updateUserLastEmailCheck(id: string, lastCheck: Date): Promise<User>;
+  updateUserEmailCheckInterval(id: string, intervalMinutes: number): Promise<User>;
   deleteUser(id: string): Promise<void>;
 
   // Contact methods
@@ -86,6 +88,24 @@ export class DatabaseStorage implements IStorage {
     const [user] = await db
       .update(users)
       .set({ stripeCustomerId: customerId })
+      .where(eq(users.id, id))
+      .returning();
+    return user;
+  }
+
+  async updateUserLastEmailCheck(id: string, lastCheck: Date): Promise<User> {
+    const [user] = await db
+      .update(users)
+      .set({ lastEmailCheck: lastCheck })
+      .where(eq(users.id, id))
+      .returning();
+    return user;
+  }
+
+  async updateUserEmailCheckInterval(id: string, intervalMinutes: number): Promise<User> {
+    const [user] = await db
+      .update(users)
+      .set({ emailCheckInterval: intervalMinutes.toString() })
       .where(eq(users.id, id))
       .returning();
     return user;
