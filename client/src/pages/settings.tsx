@@ -155,10 +155,10 @@ Email Guardian System`);
               
               <div className="flex items-center justify-between">
                 <div>
-                  <Label className="text-base font-medium">Auto-Process Emails</Label>
-                  <p className="text-sm text-gray-500">Automatically process new emails every 5 minutes</p>
+                  <Label className="text-base font-medium">Auto-Process Emails (Always On)</Label>
+                  <p className="text-sm text-gray-500">System automatically processes emails every 5 minutes</p>
                 </div>
-                <Switch checked={autoProcessing} onCheckedChange={setAutoProcessing} />
+                <Switch checked={true} disabled={true} />
               </div>
             </CardContent>
           </Card>

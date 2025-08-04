@@ -13,16 +13,19 @@ import { useAuth } from "@/hooks/use-auth";
 import { Shield, Mail, CheckCircle, AlertCircle, ArrowRight, RefreshCw } from "lucide-react";
 
 function ExistingUserLogin() {
-  const { login } = useAuth();
+  const { login, user: currentUser } = useAuth();
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   
+  // Only show user list if no one is currently logged in
   const { data: users, refetch, isLoading } = useQuery({
     queryKey: ['/api/users'],
     queryFn: async () => {
+      if (currentUser) return []; // Don't fetch if someone is logged in
       const res = await apiRequest("GET", "/api/users");
       return res.json();
     },
+    enabled: !currentUser, // Only run query if no current user
   });
 
   const handleUserLogin = async (user: any) => {
@@ -60,7 +63,8 @@ function ExistingUserLogin() {
     }
   };
 
-  if (!users || users.length === 0) {
+  // Don't show existing users if someone is currently logged in
+  if (currentUser || !users || users.length === 0) {
     return null;
   }
 

@@ -6,7 +6,33 @@ import { stripeService } from "./services/stripe";
 import { emailProcessor } from "./services/email-processor";
 import { insertUserSchema, insertContactSchema } from "@shared/schema";
 
+// Auto-processing scheduler
+let processingInterval: NodeJS.Timeout | null = null;
+
+async function startAutoProcessing() {
+  if (processingInterval) return; // Already running
+  
+  processingInterval = setInterval(async () => {
+    try {
+      console.log('Auto-processing emails...');
+      const users = await storage.getAllUsers();
+      
+      for (const user of users) {
+        if (user.gmailToken) {
+          const { EmailProcessor } = await import('./services/email-processor');
+          const emailProcessor = new EmailProcessor();
+          await emailProcessor.processNewEmails(user);
+        }
+      }
+    } catch (error: any) {
+      console.error('Auto-processing error:', error.message);
+    }
+  }, 5 * 60 * 1000); // Run every 5 minutes
+}
+
 export async function registerRoutes(app: Express): Promise<Server> {
+  // Start auto-processing when server starts
+  startAutoProcessing();
   // User routes
   app.get("/api/users", async (req, res) => {
     try {
