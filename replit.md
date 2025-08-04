@@ -37,6 +37,19 @@ The application is fully functional and ready for deployment once API credential
   - Updated scheduler to check every 30 seconds for more responsive per-user intervals
   - Added database fields for storing last check time and user preferences
 
+- **Stripe Payment Integration:**
+  - Integrated full Stripe payment processing for $1 donations
+  - Added payment link creation and webhook handling
+  - Enhanced auto-reply emails with real Stripe payment URLs
+  - Created checkout page with Stripe Elements
+  - Added business website page for Stripe verification compliance
+
+- **Auto-Reply Fixes:**
+  - Fixed infinite loop bug causing duplicate "Re: Re:" auto-replies
+  - Added comprehensive email filtering to skip system emails
+  - Created cleanup tools for removing duplicate auto-reply emails
+  - Enhanced Gmail search queries to exclude sent emails and self-replies
+
 ## User Preferences
 
 Preferred communication style: Simple, everyday language.
