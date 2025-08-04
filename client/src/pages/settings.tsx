@@ -15,7 +15,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useLocation } from "wouter";
-import { Save, Mail, Shield, DollarSign, Bell, AlertTriangle, UserX, Clock, Trash2 } from "lucide-react";
+import { Save, Mail, Shield, DollarSign, Bell, AlertTriangle, UserX, Clock, Trash2, CreditCard } from "lucide-react";
 
 function CleanupButton({ userId }: { userId?: string }) {
   const { toast } = useToast();
@@ -376,6 +376,22 @@ Email Guardian System`);
                   <p className="text-sm text-gray-500">Remove duplicate auto-reply emails if any got created by accident</p>
                 </div>
                 <CleanupButton userId={user?.id} />
+              </div>
+              
+              <div className="flex items-center justify-between">
+                <div>
+                  <Label className="text-base font-medium">Test Payment System</Label>
+                  <p className="text-sm text-gray-500">Test the Stripe payment integration with a $1 donation</p>
+                </div>
+                <Button
+                  onClick={() => setLocation('/checkout')}
+                  variant="outline"
+                  size="sm"
+                  data-testid="button-test-payment"
+                >
+                  <CreditCard size={16} className="mr-1" />
+                  Test Payment
+                </Button>
               </div>
             </CardContent>
           </Card>

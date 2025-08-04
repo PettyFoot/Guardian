@@ -125,9 +125,37 @@ export class EmailProcessor {
       await gmailService.addLabel(user.gmailToken!, messageId, pendingLabel.id);
     }
 
-    // Send auto-reply with donation request
-    const donationUrl = `Please reply to this email to confirm you've made a $1 donation to access this inbox.`;
-    await this.sendDonationRequest(user, senderEmail, subject, donationUrl);
+    // Create Stripe payment link for the donation
+    try {
+      const paymentResponse = await fetch('http://localhost:5000/api/create-payment-link', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          amount: 1.00, // $1 donation
+          senderEmail,
+          pendingEmailId: pendingEmail.id,
+          userId: user.id
+        })
+      });
+      
+      const paymentData = await paymentResponse.json();
+      
+      if (paymentData.paymentUrl) {
+        // Update pending email with payment link
+        await storage.updatePendingEmailDonationLink(pendingEmail.id, paymentData.paymentLinkId);
+        
+        // Send auto-reply with donation request
+        await this.sendDonationRequest(user, senderEmail, subject, paymentData.paymentUrl);
+      } else {
+        console.error('Failed to create payment link:', paymentData.message);
+        // Fallback to manual donation request
+        await this.sendDonationRequest(user, senderEmail, subject, 'Please contact us for payment instructions.');
+      }
+    } catch (error: any) {
+      console.error('Error creating payment link:', error.message);
+      // Fallback to manual donation request
+      await this.sendDonationRequest(user, senderEmail, subject, 'Please contact us for payment instructions.');
+    }
     
     // Remove from inbox since it's now pending donation
     await gmailService.removeFromInbox(user.gmailToken!, messageId);
@@ -156,17 +184,15 @@ Thank you for your email. To help manage my inbox and reduce spam, I use an emai
 This one-time payment grants you permanent access to my inbox for future emails.
 
 To complete your donation and have your email delivered:
-1. Send a $1 donation via PayPal, Venmo, or your preferred method
-2. Reply to this email confirming you've made the donation
-3. Your original email will then be delivered to my inbox
-4. You'll be added to my known contacts list for future emails
 
-Payment methods:
-- PayPal: [Add your PayPal email]
-- Venmo: [Add your Venmo username] 
-- Other: Contact me for alternative payment methods
+🔗 **Complete Your $1 Donation Here:** ${donationUrl}
 
-Thank you for understanding this filtering system helps reduce spam!
+Once your payment is confirmed:
+- Your original email will be delivered to my inbox
+- You'll be added to my known contacts list for future emails
+- All future emails from you will bypass the filtering system
+
+This filtering system helps reduce spam while ensuring legitimate emails reach me. Thank you for understanding!
 
 Best regards,
 Email Guardian System

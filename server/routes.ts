@@ -5,6 +5,15 @@ import { gmailService } from "./services/gmail";
 import { stripeService } from "./services/stripe";
 import { emailProcessor } from "./services/email-processor";
 import { insertUserSchema, insertContactSchema } from "@shared/schema";
+import Stripe from "stripe";
+
+// Initialize Stripe
+if (!process.env.STRIPE_SECRET_KEY) {
+  throw new Error('Missing required Stripe secret: STRIPE_SECRET_KEY');
+}
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
+  apiVersion: "2025-07-30.basil",
+});
 
 // Auto-processing scheduler
 let processingInterval: NodeJS.Timeout | null = null;
@@ -351,10 +360,130 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Placeholder for future Stripe webhook (disabled for now)
-  app.post("/api/webhooks/stripe", async (req, res) => {
-    res.json({ message: "Stripe webhooks not configured yet" });
+  // Stripe payment endpoints
+  app.post("/api/create-payment-intent", async (req, res) => {
+    try {
+      const { amount, senderEmail, pendingEmailId } = req.body;
+      
+      if (!amount || !senderEmail) {
+        return res.status(400).json({ message: "Amount and sender email are required" });
+      }
+      
+      const paymentIntent = await stripe.paymentIntents.create({
+        amount: Math.round(amount * 100), // Convert to cents
+        currency: "usd",
+        metadata: {
+          senderEmail,
+          pendingEmailId: pendingEmailId || '',
+          type: 'email_access_donation'
+        }
+      });
+      
+      res.json({ clientSecret: paymentIntent.client_secret });
+    } catch (error: any) {
+      res.status(500).json({ message: "Error creating payment intent: " + error.message });
+    }
   });
+
+  app.post("/api/create-payment-link", async (req, res) => {
+    try {
+      const { amount, senderEmail, pendingEmailId, userId } = req.body;
+      
+      if (!amount || !senderEmail || !pendingEmailId || !userId) {
+        return res.status(400).json({ message: "Missing required fields" });
+      }
+
+      // Create a payment link for the donation
+      const paymentLink = await stripe.paymentLinks.create({
+        line_items: [
+          {
+            price_data: {
+              currency: 'usd',
+              product_data: {
+                name: 'Email Access Donation',
+                description: `Access donation from ${senderEmail}`,
+              },
+              unit_amount: Math.round(amount * 100), // Convert to cents
+            },
+            quantity: 1,
+          },
+        ],
+        payment_method_types: ['card'], // Explicitly specify card payments
+        metadata: {
+          senderEmail,
+          pendingEmailId,
+          userId,
+          type: 'email_access_donation'
+        }
+      });
+
+      res.json({ 
+        paymentUrl: paymentLink.url,
+        paymentLinkId: paymentLink.id 
+      });
+    } catch (error: any) {
+      res.status(500).json({ message: "Error creating payment link: " + error.message });
+    }
+  });
+
+  // Stripe webhooks for payment completion
+  app.post("/api/webhooks/stripe", async (req, res) => {
+    const sig = req.headers['stripe-signature'];
+    let event;
+
+    try {
+      // For testing, accept any webhook without verification
+      // In production, you should verify with your webhook secret
+      event = req.body;
+    } catch (err: any) {
+      console.log('Webhook signature verification failed.', err.message);
+      return res.status(400).send(`Webhook Error: ${err.message}`);
+    }
+
+    // Handle the event
+    switch (event.type) {
+      case 'payment_intent.succeeded':
+        const paymentIntent = event.data.object;
+        if (paymentIntent.metadata?.type === 'email_access_donation') {
+          await handlePaymentSuccess(paymentIntent.metadata);
+        }
+        break;
+      case 'checkout.session.completed':
+        const session = event.data.object;
+        if (session.metadata?.type === 'email_access_donation') {
+          await handlePaymentSuccess(session.metadata);
+        }
+        break;
+      default:
+        console.log(`Unhandled event type ${event.type}`);
+    }
+
+    res.json({ received: true });
+  });
+
+  async function handlePaymentSuccess(metadata: any) {
+    try {
+      const { senderEmail, pendingEmailId, userId } = metadata;
+      
+      if (!senderEmail || !userId) {
+        console.log('Missing metadata for payment success');
+        return;
+      }
+
+      console.log(`Payment successful for ${senderEmail}, processing access...`);
+      
+      // Import EmailProcessor to avoid circular dependencies
+      const { EmailProcessor } = await import('./services/email-processor');
+      const emailProcessor = new EmailProcessor();
+      
+      // Process the donation completion
+      await emailProcessor.processDonationComplete(senderEmail, userId);
+      
+      console.log(`Email access granted to ${senderEmail}`);
+    } catch (error: any) {
+      console.error('Error handling payment success:', error.message);
+    }
+  }
 
   // Cleanup endpoint for removing duplicate auto-reply emails
   app.post("/api/cleanup-duplicate-emails", async (req, res) => {
