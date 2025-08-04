@@ -10,28 +10,31 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/use-auth";
 import { Plus, Trash2, User } from "lucide-react";
-
-const CURRENT_USER_ID = "user-123";
 
 export default function Contacts() {
   const [newContactEmail, setNewContactEmail] = useState("");
   const [newContactName, setNewContactName] = useState("");
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const { toast } = useToast();
+  const { user } = useAuth();
 
   const { data: contacts, isLoading } = useQuery({
-    queryKey: ["/api/contacts"],
+    queryKey: ["/api/contacts", user?.id],
     queryFn: async () => {
-      const res = await apiRequest("GET", `/api/contacts?userId=${CURRENT_USER_ID}`);
+      if (!user?.id) throw new Error("User not authenticated");
+      const res = await apiRequest("GET", `/api/contacts?userId=${user.id}`);
       return res.json();
-    }
+    },
+    enabled: !!user?.id
   });
 
   const addContactMutation = useMutation({
     mutationFn: async (contactData: { email: string; name?: string }) => {
+      if (!user?.id) throw new Error("User not authenticated");
       const res = await apiRequest("POST", "/api/contacts", {
-        userId: CURRENT_USER_ID,
+        userId: user.id,
         email: contactData.email,
         name: contactData.name || null,
         isWhitelisted: true
@@ -39,7 +42,7 @@ export default function Contacts() {
       return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/contacts"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/contacts", user?.id] });
       setNewContactEmail("");
       setNewContactName("");
       setIsDialogOpen(false);
@@ -62,7 +65,7 @@ export default function Contacts() {
       await apiRequest("DELETE", `/api/contacts/${contactId}`);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/contacts"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/contacts", user?.id] });
       toast({
         title: "Contact Removed",
         description: "The contact has been removed from your whitelist.",
