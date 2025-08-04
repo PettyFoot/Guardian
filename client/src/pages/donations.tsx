@@ -94,9 +94,9 @@ export default function Donations() {
 
           {/* Donations List */}
           <Card>
-            <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle>All Donations</CardTitle>
-              <Badge variant="secondary">
+            <CardHeader className="space-y-2 sm:space-y-0 sm:flex sm:flex-row sm:items-center sm:justify-between">
+              <CardTitle className="text-lg sm:text-xl">All Donations</CardTitle>
+              <Badge variant="secondary" className="w-fit">
                 {donations?.length || 0} total
               </Badge>
             </CardHeader>

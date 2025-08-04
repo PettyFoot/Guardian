@@ -104,11 +104,11 @@ export default function Contacts() {
         
         <div className="p-4 sm:p-6 lg:p-8">
           <Card>
-            <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle>Contact Management</CardTitle>
+            <CardHeader className="space-y-4 sm:space-y-0 sm:flex sm:flex-row sm:items-center sm:justify-between">
+              <CardTitle className="text-lg sm:text-xl">Contact Management</CardTitle>
               <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
                 <DialogTrigger asChild>
-                  <Button>
+                  <Button size="sm" className="w-full sm:w-auto" data-testid="button-add-contact">
                     <Plus className="mr-2" size={16} />
                     Add Contact
                   </Button>
@@ -180,24 +180,24 @@ export default function Contacts() {
                     </div>
                   ) : (
                     contacts?.map((contact: any) => (
-                      <div key={contact.id} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg border hover:bg-gray-100 transition-colors">
+                      <div key={contact.id} className="flex flex-col sm:flex-row sm:items-center sm:justify-between p-4 bg-gray-50 rounded-lg border hover:bg-gray-100 transition-colors space-y-3 sm:space-y-0">
                         <div className="flex items-center space-x-3">
-                          <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
+                          <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center flex-shrink-0">
                             <User className="text-blue-600" size={20} />
                           </div>
-                          <div>
-                            <p className="font-medium text-gray-900">{contact.email}</p>
+                          <div className="min-w-0 flex-1">
+                            <p className="font-medium text-gray-900 truncate">{contact.email}</p>
                             {contact.name && (
-                              <p className="text-sm text-gray-500">{contact.name}</p>
+                              <p className="text-sm text-gray-500 truncate">{contact.name}</p>
                             )}
                             <p className="text-xs text-gray-400">
                               Added {new Date(contact.addedAt).toLocaleDateString()}
                             </p>
                           </div>
                         </div>
-                        <div className="flex items-center space-x-3">
+                        <div className="flex items-center justify-between sm:justify-end space-x-3">
                           {contact.isWhitelisted && (
-                            <Badge variant="secondary" className="bg-green-100 text-green-700">
+                            <Badge variant="secondary" className="bg-green-100 text-green-700 text-xs">
                               Whitelisted
                             </Badge>
                           )}
@@ -206,7 +206,7 @@ export default function Contacts() {
                             size="sm"
                             onClick={() => deleteContactMutation.mutate(contact.id)}
                             disabled={deleteContactMutation.isPending}
-                            className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                            className="text-red-600 hover:text-red-700 hover:bg-red-50 flex-shrink-0"
                           >
                             <Trash2 size={16} />
                           </Button>

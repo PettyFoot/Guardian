@@ -39,11 +39,11 @@ export default function EmailQueue() {
         <div className="p-4 sm:p-6 lg:p-8">
           <Card>
             <CardHeader>
-              <CardTitle>Email Queue Management</CardTitle>
+              <CardTitle className="text-lg sm:text-xl">Email Queue Management</CardTitle>
             </CardHeader>
             <CardContent>
               <Tabs defaultValue="all" className="w-full">
-                <TabsList className="grid w-full grid-cols-2 sm:grid-cols-4">
+                <TabsList className="grid w-full grid-cols-2 sm:grid-cols-4 text-xs sm:text-sm">
                   <TabsTrigger value="all">
                     All ({pendingEmails?.length || 0})
                   </TabsTrigger>
