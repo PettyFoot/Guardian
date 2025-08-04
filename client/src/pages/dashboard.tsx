@@ -1,6 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { Sidebar } from "@/components/layout/sidebar";
-import { Header } from "@/components/layout/header";
+import { Sidebar } from "@/components/ui/sidebar";
 import { StatsCard } from "@/components/ui/stats-card";
 import { EmailItem } from "@/components/ui/email-item";
 import { DonationItem } from "@/components/ui/donation-item";
@@ -62,19 +61,21 @@ export default function Dashboard() {
   }
 
   return (
-    <div className="min-h-screen flex bg-gray-50">
-      <Sidebar />
-      
-      <main className="flex-1 ml-64">
-        <Header 
-          title="Dashboard" 
-          subtitle={`Monitor your email filtering and donation system • Connected: ${user?.email}`}
-          gmailStatus="connected"
-        />
+    <Sidebar>
+      <div className="min-h-screen bg-gray-50">
+        {/* Header */}
+        <div className="bg-white border-b px-4 py-6 sm:px-6 lg:px-8">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
+            <p className="text-sm text-gray-600 mt-1">
+              Monitor your email filtering and donation system • Connected: {user?.email}
+            </p>
+          </div>
+        </div>
         
-        <div className="p-8">
+        <div className="p-4 sm:p-6 lg:p-8">
           {/* Stats Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 mb-6 sm:mb-8">
             <StatsCard
               title="Emails Filtered Today"
               value={stats?.emailsFiltered || 0}
@@ -274,7 +275,7 @@ export default function Dashboard() {
             </CardContent>
           </Card>
         </div>
-      </main>
-    </div>
+      </div>
+    </Sidebar>
   );
 }

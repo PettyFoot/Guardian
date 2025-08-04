@@ -1,6 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { Sidebar } from "@/components/layout/sidebar";
-import { Header } from "@/components/layout/header";
+import { Sidebar } from "@/components/ui/sidebar";
 import { DonationItem } from "@/components/ui/donation-item";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -32,19 +31,21 @@ export default function Donations() {
     sum + parseFloat(donation.amount), 0);
 
   return (
-    <div className="min-h-screen flex bg-gray-50">
-      <Sidebar />
-      
-      <main className="flex-1 ml-64">
-        <Header 
-          title="Donations" 
-          subtitle="Track all received donations and revenue"
-          gmailStatus="connected"
-        />
+    <Sidebar>
+      <div className="min-h-screen bg-gray-50">
+        {/* Header */}
+        <div className="bg-white border-b px-4 py-6 sm:px-6 lg:px-8">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">Donations</h1>
+            <p className="text-sm text-gray-600 mt-1">
+              Track all received donations and revenue
+            </p>
+          </div>
+        </div>
         
-        <div className="p-8">
+        <div className="p-4 sm:p-6 lg:p-8">
           {/* Summary Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 mb-6 sm:mb-8">
             <Card>
               <CardContent className="p-6">
                 <div className="flex items-center justify-between">
@@ -131,7 +132,7 @@ export default function Donations() {
             </CardContent>
           </Card>
         </div>
-      </main>
-    </div>
+      </div>
+    </Sidebar>
   );
 }

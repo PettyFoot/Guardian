@@ -1,6 +1,5 @@
 import { useState, useEffect } from "react";
-import { Sidebar } from "@/components/layout/sidebar";
-import { Header } from "@/components/layout/header";
+import { Sidebar } from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -199,17 +198,19 @@ Email Guardian System`);
   };
 
   return (
-    <div className="min-h-screen flex bg-gray-50">
-      <Sidebar />
-      
-      <main className="flex-1 ml-64">
-        <Header 
-          title="Settings" 
-          subtitle={`Configure your email filtering and donation system • Connected: ${user?.email}`}
-          gmailStatus={gmailConnected ? "connected" : "disconnected"}
-        />
+    <Sidebar>
+      <div className="min-h-screen bg-gray-50">
+        {/* Header */}
+        <div className="bg-white border-b px-4 py-6 sm:px-6 lg:px-8">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">Settings</h1>
+            <p className="text-sm text-gray-600 mt-1">
+              Configure your email filtering and donation system • Connected: {user?.email}
+            </p>
+          </div>
+        </div>
         
-        <div className="p-8 space-y-8">
+        <div className="p-4 sm:p-6 lg:p-8 space-y-6 sm:space-y-8">
           {/* Gmail Integration */}
           <Card>
             <CardHeader>
@@ -459,7 +460,7 @@ Email Guardian System`);
             </Button>
           </div>
         </div>
-      </main>
-    </div>
+      </div>
+    </Sidebar>
   );
 }

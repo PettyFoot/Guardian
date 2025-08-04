@@ -1,7 +1,6 @@
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useState } from "react";
-import { Sidebar } from "@/components/layout/sidebar";
-import { Header } from "@/components/layout/header";
+import { Sidebar } from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -91,17 +90,19 @@ export default function Contacts() {
   };
 
   return (
-    <div className="min-h-screen flex bg-gray-50">
-      <Sidebar />
-      
-      <main className="flex-1 ml-64">
-        <Header 
-          title="Known Contacts" 
-          subtitle="Manage your email whitelist and trusted senders"
-          gmailStatus="connected"
-        />
+    <Sidebar>
+      <div className="min-h-screen bg-gray-50">
+        {/* Header */}
+        <div className="bg-white border-b px-4 py-6 sm:px-6 lg:px-8">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">Known Contacts</h1>
+            <p className="text-sm text-gray-600 mt-1">
+              Manage your email whitelist and trusted senders
+            </p>
+          </div>
+        </div>
         
-        <div className="p-8">
+        <div className="p-4 sm:p-6 lg:p-8">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between">
               <CardTitle>Contact Management</CardTitle>
@@ -218,7 +219,7 @@ export default function Contacts() {
             </CardContent>
           </Card>
         </div>
-      </main>
-    </div>
+      </div>
+    </Sidebar>
   );
 }
