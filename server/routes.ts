@@ -356,6 +356,56 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json({ message: "Stripe webhooks not configured yet" });
   });
 
+  // Cleanup endpoint for removing duplicate auto-reply emails
+  app.post("/api/cleanup-duplicate-emails", async (req, res) => {
+    try {
+      const { userId } = req.body;
+      
+      if (!userId) {
+        return res.status(400).json({ message: "User ID is required" });
+      }
+
+      const user = await storage.getUser(userId);
+      if (!user || !user.gmailToken) {
+        return res.json({ message: "User not found or Gmail not connected", cleaned: 0 });
+      }
+
+      // Get all pending emails for this user
+      const pendingEmails = await storage.getPendingEmails(userId);
+      
+      // Find duplicate auto-reply emails (ones with "- Email Access Request" in subject)
+      const autoReplyEmails = pendingEmails.filter(email => 
+        email.subject?.includes('- Email Access Request') || 
+        email.subject?.includes('Re: Re:') ||
+        email.sender === user.email
+      );
+
+      console.log(`Found ${autoReplyEmails.length} duplicate auto-reply emails to clean up`);
+
+      // Remove duplicate auto-reply emails from Gmail and database
+      for (const email of autoReplyEmails) {
+        try {
+          // Try to remove from Gmail (moving to trash)
+          await gmailService.removeFromInbox(user.gmailToken!, email.gmailMessageId);
+        } catch (error) {
+          // Continue even if Gmail removal fails
+          console.log(`Failed to remove Gmail message ${email.gmailMessageId}, continuing...`);
+        }
+        
+        // Delete from database
+        await storage.deletePendingEmail(email.id);
+      }
+
+      res.json({ 
+        message: `Cleaned up ${autoReplyEmails.length} duplicate auto-reply emails`,
+        cleaned: autoReplyEmails.length 
+      });
+    } catch (error: any) {
+      console.error('Cleanup error:', error);
+      res.status(500).json({ message: "Error cleaning up emails: " + error.message });
+    }
+  });
+
   const httpServer = createServer(app);
   return httpServer;
 }

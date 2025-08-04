@@ -17,7 +17,8 @@ export class EmailProcessor {
       const after = lastCheckTime.toISOString().split('T')[0].replace(/-/g, '/');
       
       // Get emails from the last check time, including unread and already read emails that might have been missed
-      const query = `after:${after} -label:spam`;
+      // Exclude sent emails and emails from the user's own address to prevent processing auto-replies
+      const query = `after:${after} -label:spam -from:${user.email} -in:sent`;
       const messages = await gmailService.getMessages(
         user.gmailToken,
         query,
@@ -59,6 +60,29 @@ export class EmailProcessor {
     const snippet = message.snippet || '';
 
     console.log(`Processing email from: ${senderEmail}, subject: ${subject}`);
+
+    // Skip auto-reply emails from the system itself
+    if (senderEmail === user.email) {
+      console.log(`Skipping email from user's own email address: ${senderEmail}`);
+      return;
+    }
+
+    // Skip emails that are replies to auto-reply messages (containing "Email Access Request")
+    if (subject.includes('Email Access Request') || 
+        subject.includes('Re: Re:') || 
+        subject.match(/^Re:\s+.*\s+-\s+Email Access Request/)) {
+      console.log(`Skipping auto-reply or duplicate reply: ${subject}`);
+      return;
+    }
+
+    // Skip emails with mailer-daemon or no-reply addresses
+    if (senderEmail.includes('mailer-daemon') || 
+        senderEmail.includes('no-reply') || 
+        senderEmail.includes('noreply') ||
+        senderEmail.includes('daemon@')) {
+      console.log(`Skipping system/automated email from: ${senderEmail}`);
+      return;
+    }
 
     // Check if sender is whitelisted
     const isWhitelisted = await storage.isEmailWhitelisted(user.id, senderEmail);

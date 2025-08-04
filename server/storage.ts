@@ -34,6 +34,7 @@ export interface IStorage {
   updatePendingEmailStatus(id: string, status: string): Promise<PendingEmail>;
   updatePendingEmailDonationLink(id: string, donationLinkId: string): Promise<PendingEmail>;
   getPendingEmailByGmailId(userId: string, gmailMessageId: string): Promise<PendingEmail | undefined>;
+  deletePendingEmail(id: string): Promise<void>;
 
   // Donation methods
   getDonations(userId: string): Promise<Donation[]>;
@@ -184,6 +185,10 @@ export class DatabaseStorage implements IStorage {
       .from(pendingEmails)
       .where(and(eq(pendingEmails.userId, userId), eq(pendingEmails.gmailMessageId, gmailMessageId)));
     return email || undefined;
+  }
+
+  async deletePendingEmail(id: string): Promise<void> {
+    await db.delete(pendingEmails).where(eq(pendingEmails.id, id));
   }
 
   async getDonations(userId: string): Promise<Donation[]> {

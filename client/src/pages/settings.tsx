@@ -15,7 +15,45 @@ import { useAuth } from "@/hooks/use-auth";
 import { useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useLocation } from "wouter";
-import { Save, Mail, Shield, DollarSign, Bell, AlertTriangle, UserX, Clock } from "lucide-react";
+import { Save, Mail, Shield, DollarSign, Bell, AlertTriangle, UserX, Clock, Trash2 } from "lucide-react";
+
+function CleanupButton({ userId }: { userId?: string }) {
+  const { toast } = useToast();
+  
+  const cleanupMutation = useMutation({
+    mutationFn: () => fetch('/api/cleanup-duplicate-emails', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId })
+    }).then(res => res.json()),
+    onSuccess: (data: any) => {
+      toast({
+        title: "Cleanup Complete",
+        description: `${data.cleaned} duplicate emails removed`,
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Cleanup Failed",
+        description: error.message,
+        variant: "destructive",
+      });
+    }
+  });
+
+  return (
+    <Button
+      onClick={() => cleanupMutation.mutate()}
+      variant="outline"
+      size="sm"
+      disabled={cleanupMutation.isPending}
+      data-testid="button-cleanup-duplicates"
+    >
+      <Trash2 size={16} className="mr-1" />
+      {cleanupMutation.isPending ? 'Cleaning...' : 'Clean Up'}
+    </Button>
+  );
+}
 
 export default function Settings() {
   const { user, logout } = useAuth();
@@ -319,6 +357,25 @@ Email Guardian System`);
                   <p className="text-sm text-gray-500">Receive notifications for new donations and filtered emails</p>
                 </div>
                 <Switch checked={true} />
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Maintenance Tools */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center space-x-2">
+                <Trash2 className="text-orange-600" size={20} />
+                <span>Maintenance Tools</span>
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <Label className="text-base font-medium">Clean Up Auto-Reply Duplicates</Label>
+                  <p className="text-sm text-gray-500">Remove duplicate auto-reply emails if any got created by accident</p>
+                </div>
+                <CleanupButton userId={user?.id} />
               </div>
             </CardContent>
           </Card>
