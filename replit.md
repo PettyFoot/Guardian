@@ -26,8 +26,9 @@ The system uses React for the frontend with shadcn/ui components, Express.js for
 - Stripe API keys for payment processing (STRIPE_SECRET_KEY, VITE_STRIPE_PUBLIC_KEY)
 - OpenAI API key for AI responses (OPENAI_API_KEY) - Currently experiencing quota limits
 
-⚠️ **Current Issue:**
-- OpenAI API quota exceeded - AI responses fall back to improved template until quota is restored
+✅ **Updated Configuration:**
+- Switched to GPT-4o-mini model for cost efficiency ($0.00015 vs $0.005 per 1K tokens)
+- AI responses should now work with current OpenAI account setup
 
 🎯 **Ready for Use:** 
 The application is fully functional and ready for deployment once API credentials are provided.

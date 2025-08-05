@@ -52,7 +52,7 @@ Payment link: ${paymentLink}
 Generate only the email body (no subject):`;
 
       const response = await this.openai.chat.completions.create({
-        model: "gpt-4o", // the newest OpenAI model is "gpt-4o" which was released May 13, 2024. do not change this unless explicitly requested by the user
+        model: "gpt-4o-mini", // using the cheaper mini model for cost efficiency
         messages: [
           {
             role: "system",
@@ -109,7 +109,7 @@ Content: ${snippet}
 Respond with only valid JSON:`;
 
       const response = await this.openai.chat.completions.create({
-        model: "gpt-4o", // the newest OpenAI model is "gpt-4o" which was released May 13, 2024. do not change this unless explicitly requested by the user
+        model: "gpt-4o-mini", // using the cheaper mini model for cost efficiency
         messages: [
           {
             role: "system",
