@@ -106,7 +106,7 @@ export class EmailProcessor {
     // Check if we already have a pending email entry for this message
     const existingPendingEmail = await storage.getPendingEmailByGmailId(user.id, messageId);
     if (existingPendingEmail) {
-      console.log(`Email ${messageId} already processed as pending`);
+      console.log(`Email ${messageId} already processed as pending, skipping duplicate`);
       return;
     }
 
