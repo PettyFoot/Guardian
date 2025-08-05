@@ -34,8 +34,13 @@ The system uses React for the frontend with shadcn/ui components, Express.js for
 The application is fully functional and ready for deployment once API credentials are provided.
 
 ## Recent Changes (January 5, 2025)
+- **CRITICAL BUG FIX**: Fixed duplicate email processing issue
+  - **FIXED**: Email deduplication was failing due to missing userId parameter in getPendingEmailByGmailId call
+  - **CLEANED**: Removed duplicate pending email entries from database
+  - **RESULT**: Each email is now processed only once, eliminating duplicate responses and queue entries
+
 - **AI-Powered Email Response System:**
-  - **NEW**: Added AI-generated contextual donation requests using OpenAI GPT-4o
+  - **NEW**: Added AI-generated contextual donation requests using OpenAI GPT-4o-mini (cost-effective)
   - **NEW**: User toggle in settings to choose between AI responses and template responses
   - **NEW**: AI analyzes incoming email content to create personalized, warm responses
   - **NEW**: Enhanced prompting for genuine, conversational tone that acknowledges sender's specific business/request
