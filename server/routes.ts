@@ -507,6 +507,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Webhook event logger for debugging
+  app.post("/api/webhooks/stripe-debug", async (req, res) => {
+    console.log('\n=== STRIPE WEBHOOK DEBUG ===');
+    console.log('Headers:', JSON.stringify(req.headers, null, 2));
+    console.log('Body:', JSON.stringify(req.body, null, 2));
+    console.log('=== END WEBHOOK DEBUG ===\n');
+    res.json({ received: true, debug: true });
+  });
+
   // Stripe webhooks for payment completion
   app.post("/api/webhooks/stripe", async (req, res) => {
     const sig = req.headers['stripe-signature'];
@@ -521,26 +530,52 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.status(400).send(`Webhook Error: ${err.message}`);
     }
 
-    // Handle the event
+    // Enhanced logging for all webhook events
+    console.log('\n=== STRIPE WEBHOOK RECEIVED ===');
+    console.log(`Event Type: ${event.type}`);
+    console.log(`Event ID: ${event.id}`);
+    console.log(`Event Data:`, JSON.stringify(event.data, null, 2));
+    console.log('=== END WEBHOOK DATA ===\n');
+    
     switch (event.type) {
       case 'payment_intent.succeeded':
         const paymentIntent = event.data.object;
+        console.log('Payment Intent succeeded:', paymentIntent.id, paymentIntent.metadata);
         if (paymentIntent.metadata?.type === 'email_access_donation') {
           await handlePaymentSuccess(paymentIntent.metadata);
         } else if (paymentIntent.metadata?.type === 'inbox_access') {
           await handleDynamicPaymentSuccess(paymentIntent.metadata, paymentIntent.id);
+        } else {
+          // Try to handle payment without metadata by checking if it's from a payment link
+          console.log('Payment Intent without inbox_access metadata, checking for payment link association');
+          await handleDynamicPaymentSuccess({}, paymentIntent.id);
         }
         break;
       case 'checkout.session.completed':
         const session = event.data.object;
+        console.log('Checkout session completed:', session.id, session.metadata);
         if (session.metadata?.type === 'email_access_donation') {
           await handlePaymentSuccess(session.metadata);
         } else if (session.metadata?.type === 'inbox_access') {
           await handleDynamicPaymentSuccess(session.metadata, session.id);
+        } else {
+          // Try to handle session without metadata
+          console.log('Checkout session without inbox_access metadata, checking for payment link association');
+          await handleDynamicPaymentSuccess({}, session.id);
+        }
+        break;
+      case 'payment_link.payment_intent.succeeded':
+        const linkPaymentIntent = event.data.object;
+        console.log('Payment Link Payment Intent succeeded:', linkPaymentIntent.id, linkPaymentIntent.metadata);
+        if (linkPaymentIntent.metadata?.type === 'inbox_access') {
+          await handleDynamicPaymentSuccess(linkPaymentIntent.metadata, linkPaymentIntent.id);
+        } else {
+          // Handle payment link payment without metadata
+          await handleDynamicPaymentSuccess({}, linkPaymentIntent.id);
         }
         break;
       default:
-        console.log(`Unhandled event type ${event.type}`);
+        console.log(`Unhandled event type ${event.type}`, event.data?.object?.id || 'no ID');
     }
 
     res.json({ received: true });
@@ -570,12 +605,47 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   }
 
-  async function handleDynamicPaymentSuccess(metadata: any, sessionId: string) {
+  async function handleDynamicPaymentSuccess(metadata: any, sessionId: string, paymentLinkId?: string) {
     try {
-      const { senderEmail, targetEmail, userId } = metadata;
+      let { senderEmail, targetEmail, userId } = metadata;
+      
+      // If metadata is missing, try to find the payment intention by payment link ID or session ID
+      if (!senderEmail || !targetEmail || !userId) {
+        console.log('Missing metadata, attempting to find payment intention...', { paymentLinkId, sessionId });
+        
+        // Try to find by payment link ID first
+        if (paymentLinkId) {
+          const intention = await storage.getPaymentIntentionByStripeLink(paymentLinkId);
+          if (intention) {
+            senderEmail = intention.senderEmail;
+            targetEmail = intention.targetEmail;
+            userId = intention.userId;
+            console.log(`Found payment intention by link ID: ${senderEmail} -> ${targetEmail}`);
+          }
+        }
+        
+        // If still missing, try to find most recent pending intention (fallback)
+        if (!senderEmail && sessionId) {
+          const allUsers = await storage.getAllUsers();
+          for (const user of allUsers) {
+            const intentions = await storage.getPaymentIntentionsBySender('', user.email);
+            const pendingIntentions = intentions.filter(i => i.status === 'pending');
+            if (pendingIntentions.length > 0) {
+              const mostRecent = pendingIntentions.sort((a, b) => 
+                new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime()
+              )[0];
+              senderEmail = mostRecent.senderEmail;
+              targetEmail = mostRecent.targetEmail;
+              userId = mostRecent.userId;
+              console.log(`Found most recent pending intention: ${senderEmail} -> ${targetEmail}`);
+              break;
+            }
+          }
+        }
+      }
       
       if (!senderEmail || !targetEmail || !userId) {
-        console.log('Missing metadata for dynamic payment success');
+        console.log('Missing required data for dynamic payment success:', { senderEmail, targetEmail, userId, sessionId, paymentLinkId });
         return;
       }
 
@@ -642,6 +712,39 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.error('Error handling dynamic payment success:', error.message);
     }
   }
+
+  // Manual webhook trigger for testing
+  app.post("/api/test-webhook", async (req, res) => {
+    try {
+      const { senderEmail, targetEmail } = req.body;
+      
+      if (!senderEmail || !targetEmail) {
+        return res.status(400).json({ message: "senderEmail and targetEmail are required" });
+      }
+
+      const targetUser = await storage.getUserByEmail(targetEmail);
+      if (!targetUser) {
+        return res.status(404).json({ message: "Target user not found" });
+      }
+
+      console.log(`Manual webhook trigger: ${senderEmail} -> ${targetEmail}`);
+      
+      await handleDynamicPaymentSuccess({
+        senderEmail,
+        targetEmail,
+        userId: targetUser.id,
+        type: 'inbox_access'
+      }, `manual_${Date.now()}`);
+
+      res.json({ 
+        message: `Manual payment processing completed for ${senderEmail} -> ${targetEmail}`,
+        success: true 
+      });
+    } catch (error: any) {
+      console.error('Error in manual webhook trigger:', error);
+      res.status(500).json({ message: "Error processing manual webhook: " + error.message });
+    }
+  });
 
   // Utility endpoint to update pending email statuses for paid contacts
   app.post("/api/update-paid-statuses", async (req, res) => {
