@@ -1,0 +1,528 @@
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Email Guardian - Smart Gmail Filter & Donation System</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#1976D2',
+                        secondary: '#424242',
+                        success: '#4CAF50',
+                        warning: '#FF9800',
+                        error: '#F44336',
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'system-ui', 'sans-serif'],
+                    }
+                }
+            }
+        };
+    </script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+</head>
+<body class="bg-gray-50 font-sans">
+    <!-- @COMPONENT: AppLayout -->
+    <div class="min-h-screen flex">
+        <!-- @COMPONENT: Sidebar -->
+        <aside class="w-64 bg-white shadow-sm border-r border-gray-200 fixed h-full">
+            <div class="p-6 border-b border-gray-200">
+                <div class="flex items-center space-x-3">
+                    <div class="w-10 h-10 bg-primary rounded-lg flex items-center justify-center">
+                        <i class="fas fa-shield-alt text-white text-lg"></i>
+                    </div>
+                    <div>
+                        <h1 class="font-bold text-lg text-gray-900">Email Guardian</h1>
+                        <p class="text-sm text-gray-500">Gmail Filter System</p>
+                    </div>
+                </div>
+            </div>
+            
+            <nav class="p-4">
+                <ul class="space-y-2">
+                    <li>
+                        <a href="#" class="flex items-center space-x-3 px-4 py-3 text-gray-700 rounded-lg bg-blue-50 border-l-4 border-primary">
+                            <i class="fas fa-tachometer-alt w-5"></i>
+                            <span class="font-medium">Dashboard</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="#" class="flex items-center space-x-3 px-4 py-3 text-gray-600 rounded-lg hover:bg-gray-50 transition-colors">
+                            <i class="fas fa-inbox w-5"></i>
+                            <span>Email Queue</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="#" class="flex items-center space-x-3 px-4 py-3 text-gray-600 rounded-lg hover:bg-gray-50 transition-colors">
+                            <i class="fas fa-address-book w-5"></i>
+                            <span>Known Contacts</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="#" class="flex items-center space-x-3 px-4 py-3 text-gray-600 rounded-lg hover:bg-gray-50 transition-colors">
+                            <i class="fas fa-dollar-sign w-5"></i>
+                            <span>Donations</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="#" class="flex items-center space-x-3 px-4 py-3 text-gray-600 rounded-lg hover:bg-gray-50 transition-colors">
+                            <i class="fas fa-cog w-5"></i>
+                            <span>Settings</span>
+                        </a>
+                    </li>
+                </ul>
+            </nav>
+        </aside>
+        <!-- @END_COMPONENT: Sidebar -->
+
+        <!-- @COMPONENT: MainContent -->
+        <main class="flex-1 ml-64">
+            <!-- @COMPONENT: Header -->
+            <header class="bg-white border-b border-gray-200 px-8 py-4">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <h2 class="text-2xl font-bold text-gray-900">Dashboard</h2>
+                        <p class="text-gray-600 mt-1">Monitor your email filtering and donation system</p>
+                    </div>
+                    <div class="flex items-center space-x-4">
+                        <!-- @STATE: gmailSyncStatus:string = "connected" -->
+                        <div class="flex items-center space-x-2 px-3 py-2 bg-green-50 text-green-700 rounded-lg border border-green-200">
+                            <div class="w-2 h-2 bg-success rounded-full"></div>
+                            <span class="text-sm font-medium" data-bind="gmail.syncStatus">Gmail Connected</span>
+                        </div>
+                        <button class="px-4 py-2 bg-primary text-white rounded-lg hover:bg-blue-700 transition-colors font-medium">
+                            <i class="fas fa-sync-alt mr-2"></i>Sync Now
+                        </button>
+                    </div>
+                </div>
+            </header>
+            <!-- @END_COMPONENT: Header -->
+
+            <!-- @COMPONENT: StatsCards -->
+            <div class="p-8">
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+                    <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <p class="text-gray-500 text-sm font-medium">Emails Filtered Today</p>
+                                <p class="text-3xl font-bold text-gray-900 mt-2" data-bind="stats.emailsFiltered">147</p>
+                            </div>
+                            <div class="w-12 h-12 bg-blue-50 rounded-lg flex items-center justify-center">
+                                <i class="fas fa-filter text-primary text-xl"></i>
+                            </div>
+                        </div>
+                        <div class="flex items-center mt-4 text-sm">
+                            <i class="fas fa-arrow-up text-success mr-1"></i>
+                            <span class="text-success font-medium">+12%</span>
+                            <span class="text-gray-500 ml-1">from yesterday</span>
+                        </div>
+                    </div>
+
+                    <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <p class="text-gray-500 text-sm font-medium">Pending Donations</p>
+                                <p class="text-3xl font-bold text-gray-900 mt-2" data-bind="stats.pendingDonations">23</p>
+                            </div>
+                            <div class="w-12 h-12 bg-orange-50 rounded-lg flex items-center justify-center">
+                                <i class="fas fa-clock text-warning text-xl"></i>
+                            </div>
+                        </div>
+                        <div class="flex items-center mt-4 text-sm">
+                            <span class="text-gray-500">$23.00 potential revenue</span>
+                        </div>
+                    </div>
+
+                    <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <p class="text-gray-500 text-sm font-medium">Donations Received</p>
+                                <p class="text-3xl font-bold text-gray-900 mt-2" data-bind="stats.donationsReceived">$89</p>
+                            </div>
+                            <div class="w-12 h-12 bg-green-50 rounded-lg flex items-center justify-center">
+                                <i class="fas fa-dollar-sign text-success text-xl"></i>
+                            </div>
+                        </div>
+                        <div class="flex items-center mt-4 text-sm">
+                            <span class="text-success font-medium">89 successful</span>
+                            <span class="text-gray-500 ml-1">donations this month</span>
+                        </div>
+                    </div>
+
+                    <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <p class="text-gray-500 text-sm font-medium">Known Contacts</p>
+                                <p class="text-3xl font-bold text-gray-900 mt-2" data-bind="stats.knownContacts">342</p>
+                            </div>
+                            <div class="w-12 h-12 bg-purple-50 rounded-lg flex items-center justify-center">
+                                <i class="fas fa-users text-purple-600 text-xl"></i>
+                            </div>
+                        </div>
+                        <div class="flex items-center mt-4 text-sm">
+                            <i class="fas fa-plus text-success mr-1"></i>
+                            <span class="text-success font-medium">+5 added</span>
+                            <span class="text-gray-500 ml-1">this week</span>
+                        </div>
+                    </div>
+                </div>
+                <!-- @END_COMPONENT: StatsCards -->
+
+                <!-- @COMPONENT: EmailQueueSection -->
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
+                    <div class="bg-white rounded-xl shadow-sm border border-gray-200">
+                        <div class="px-6 py-4 border-b border-gray-200">
+                            <div class="flex items-center justify-between">
+                                <h3 class="text-lg font-semibold text-gray-900">Pending Email Queue</h3>
+                                <span class="px-3 py-1 bg-warning text-white text-sm rounded-full font-medium">23 waiting</span>
+                            </div>
+                        </div>
+                        <div class="p-6">
+                            <!-- @MAP: pendingEmails.map(email => ( -->
+                            <div class="space-y-4">
+                                <div class="flex items-center justify-between p-4 bg-gray-50 rounded-lg border">
+                                    <div class="flex-1">
+                                        <div class="flex items-center space-x-3">
+                                            <div class="w-10 h-10 bg-gray-300 rounded-full flex items-center justify-center">
+                                                <i class="fas fa-user text-gray-600"></i>
+                                            </div>
+                                            <div>
+                                                <p class="font-medium text-gray-900" data-bind="email.sender">john.doe@example.com</p>
+                                                <p class="text-sm text-gray-500" data-bind="email.subject">Project Collaboration Inquiry</p>
+                                                <p class="text-xs text-gray-400" data-bind="email.timestamp">2 hours ago</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="flex items-center space-x-2">
+                                        <span class="px-2 py-1 bg-warning text-white text-xs rounded-full">Donation Sent</span>
+                                        <button class="text-gray-400 hover:text-gray-600" data-event="click:viewEmail">
+                                            <i class="fas fa-eye"></i>
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <div class="flex items-center justify-between p-4 bg-gray-50 rounded-lg border">
+                                    <div class="flex-1">
+                                        <div class="flex items-center space-x-3">
+                                            <div class="w-10 h-10 bg-gray-300 rounded-full flex items-center justify-center">
+                                                <i class="fas fa-user text-gray-600"></i>
+                                            </div>
+                                            <div>
+                                                <p class="font-medium text-gray-900" data-bind="email.sender">sarah.wilson@startup.com</p>
+                                                <p class="text-sm text-gray-500" data-bind="email.subject">Partnership Opportunity</p>
+                                                <p class="text-xs text-gray-400" data-bind="email.timestamp">4 hours ago</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="flex items-center space-x-2">
+                                        <span class="px-2 py-1 bg-success text-white text-xs rounded-full">Paid</span>
+                                        <button class="text-gray-400 hover:text-gray-600" data-event="click:viewEmail">
+                                            <i class="fas fa-eye"></i>
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <div class="flex items-center justify-between p-4 bg-gray-50 rounded-lg border">
+                                    <div class="flex-1">
+                                        <div class="flex items-center space-x-3">
+                                            <div class="w-10 h-10 bg-gray-300 rounded-full flex items-center justify-center">
+                                                <i class="fas fa-user text-gray-600"></i>
+                                            </div>
+                                            <div>
+                                                <p class="font-medium text-gray-900" data-bind="email.sender">marketing@company.xyz</p>
+                                                <p class="text-sm text-gray-500" data-bind="email.subject">Product Demo Request</p>
+                                                <p class="text-xs text-gray-400" data-bind="email.timestamp">6 hours ago</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="flex items-center space-x-2">
+                                        <span class="px-2 py-1 bg-red-100 text-red-700 text-xs rounded-full">Pending</span>
+                                        <button class="text-gray-400 hover:text-gray-600" data-event="click:viewEmail">
+                                            <i class="fas fa-eye"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                            <!-- @END_MAP )) -->
+                            
+                            <div class="mt-6">
+                                <button class="w-full px-4 py-2 text-primary border border-primary rounded-lg hover:bg-blue-50 transition-colors font-medium" data-event="click:viewAllPending">
+                                    View All Pending Emails
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- @COMPONENT: RecentDonations -->
+                    <div class="bg-white rounded-xl shadow-sm border border-gray-200">
+                        <div class="px-6 py-4 border-b border-gray-200">
+                            <div class="flex items-center justify-between">
+                                <h3 class="text-lg font-semibold text-gray-900">Recent Donations</h3>
+                                <span class="text-sm text-gray-500">Last 24 hours</span>
+                            </div>
+                        </div>
+                        <div class="p-6">
+                            <!-- @MAP: recentDonations.map(donation => ( -->
+                            <div class="space-y-4">
+                                <div class="flex items-center justify-between">
+                                    <div class="flex items-center space-x-3">
+                                        <div class="w-8 h-8 bg-success rounded-full flex items-center justify-center">
+                                            <i class="fas fa-check text-white text-sm"></i>
+                                        </div>
+                                        <div>
+                                            <p class="font-medium text-gray-900" data-bind="donation.email">alex.chen@company.com</p>
+                                            <p class="text-sm text-gray-500" data-bind="donation.timestamp">3 hours ago</p>
+                                        </div>
+                                    </div>
+                                    <div class="text-right">
+                                        <p class="font-semibold text-success" data-bind="donation.amount">$1.00</p>
+                                        <p class="text-xs text-gray-500">Stripe</p>
+                                    </div>
+                                </div>
+
+                                <div class="flex items-center justify-between">
+                                    <div class="flex items-center space-x-3">
+                                        <div class="w-8 h-8 bg-success rounded-full flex items-center justify-center">
+                                            <i class="fas fa-check text-white text-sm"></i>
+                                        </div>
+                                        <div>
+                                            <p class="font-medium text-gray-900" data-bind="donation.email">emma.davis@startup.io</p>
+                                            <p class="text-sm text-gray-500" data-bind="donation.timestamp">5 hours ago</p>
+                                        </div>
+                                    </div>
+                                    <div class="text-right">
+                                        <p class="font-semibold text-success" data-bind="donation.amount">$5.00</p>
+                                        <p class="text-xs text-gray-500">Stripe</p>
+                                    </div>
+                                </div>
+
+                                <div class="flex items-center justify-between">
+                                    <div class="flex items-center space-x-3">
+                                        <div class="w-8 h-8 bg-success rounded-full flex items-center justify-center">
+                                            <i class="fas fa-check text-white text-sm"></i>
+                                        </div>
+                                        <div>
+                                            <p class="font-medium text-gray-900" data-bind="donation.email">mike.johnson@agency.com</p>
+                                            <p class="text-sm text-gray-500" data-bind="donation.timestamp">8 hours ago</p>
+                                        </div>
+                                    </div>
+                                    <div class="text-right">
+                                        <p class="font-semibold text-success" data-bind="donation.amount">$1.00</p>
+                                        <p class="text-xs text-gray-500">Stripe</p>
+                                    </div>
+                                </div>
+                            </div>
+                            <!-- @END_MAP )) -->
+                            
+                            <div class="mt-6 pt-4 border-t border-gray-200">
+                                <div class="flex items-center justify-between text-sm">
+                                    <span class="text-gray-500">Total Today:</span>
+                                    <span class="font-semibold text-gray-900" data-bind="donations.totalToday">$27.00</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- @END_COMPONENT: RecentDonations -->
+                </div>
+                <!-- @END_COMPONENT: EmailQueueSection -->
+
+                <!-- @COMPONENT: QuickActions -->
+                <div class="bg-white rounded-xl shadow-sm border border-gray-200 mb-8">
+                    <div class="px-6 py-4 border-b border-gray-200">
+                        <h3 class="text-lg font-semibold text-gray-900">Quick Actions</h3>
+                    </div>
+                    <div class="p-6">
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <button class="flex items-center space-x-3 p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors" data-event="click:addContact">
+                                <div class="w-10 h-10 bg-blue-50 rounded-lg flex items-center justify-center">
+                                    <i class="fas fa-user-plus text-primary"></i>
+                                </div>
+                                <div class="text-left">
+                                    <p class="font-medium text-gray-900">Add Contact</p>
+                                    <p class="text-sm text-gray-500">Whitelist a new email address</p>
+                                </div>
+                            </button>
+
+                            <button class="flex items-center space-x-3 p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors" data-event="click:bulkActions">
+                                <div class="w-10 h-10 bg-green-50 rounded-lg flex items-center justify-center">
+                                    <i class="fas fa-tasks text-success"></i>
+                                </div>
+                                <div class="text-left">
+                                    <p class="font-medium text-gray-900">Bulk Actions</p>
+                                    <p class="text-sm text-gray-500">Process multiple emails at once</p>
+                                </div>
+                            </button>
+
+                            <button class="flex items-center space-x-3 p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors" data-event="click:exportData">
+                                <div class="w-10 h-10 bg-purple-50 rounded-lg flex items-center justify-center">
+                                    <i class="fas fa-download text-purple-600"></i>
+                                </div>
+                                <div class="text-left">
+                                    <p class="font-medium text-gray-900">Export Data</p>
+                                    <p class="text-sm text-gray-500">Download donation reports</p>
+                                </div>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                <!-- @END_COMPONENT: QuickActions -->
+
+                <!-- @COMPONENT: SystemStatus -->
+                <div class="bg-white rounded-xl shadow-sm border border-gray-200">
+                    <div class="px-6 py-4 border-b border-gray-200">
+                        <h3 class="text-lg font-semibold text-gray-900">System Status</h3>
+                    </div>
+                    <div class="p-6">
+                        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                            <div class="text-center">
+                                <div class="w-12 h-12 bg-green-50 rounded-full flex items-center justify-center mx-auto mb-3">
+                                    <i class="fas fa-check-circle text-success text-xl"></i>
+                                </div>
+                                <p class="font-medium text-gray-900">Gmail API</p>
+                                <p class="text-sm text-success">Connected</p>
+                            </div>
+
+                            <div class="text-center">
+                                <div class="w-12 h-12 bg-green-50 rounded-full flex items-center justify-center mx-auto mb-3">
+                                    <i class="fas fa-check-circle text-success text-xl"></i>
+                                </div>
+                                <p class="font-medium text-gray-900">Stripe Webhooks</p>
+                                <p class="text-sm text-success">Active</p>
+                            </div>
+
+                            <div class="text-center">
+                                <div class="w-12 h-12 bg-green-50 rounded-full flex items-center justify-center mx-auto mb-3">
+                                    <i class="fas fa-sync-alt text-success text-xl"></i>
+                                </div>
+                                <p class="font-medium text-gray-900">Auto-Sync</p>
+                                <p class="text-sm text-success">Every 5 minutes</p>
+                            </div>
+
+                            <div class="text-center">
+                                <div class="w-12 h-12 bg-green-50 rounded-full flex items-center justify-center mx-auto mb-3">
+                                    <i class="fas fa-server text-success text-xl"></i>
+                                </div>
+                                <p class="font-medium text-gray-900">Server Status</p>
+                                <p class="text-sm text-success">Operational</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <!-- @END_COMPONENT: SystemStatus -->
+            </div>
+        </main>
+        <!-- @END_COMPONENT: MainContent -->
+    </div>
+    <!-- @END_COMPONENT: AppLayout -->
+
+    <!-- @COMPONENT: NotificationToast (Hidden by default) -->
+    <div id="notification-toast" class="fixed top-4 right-4 bg-white border border-gray-200 rounded-lg shadow-lg p-4 z-50 hidden">
+        <div class="flex items-center space-x-3">
+            <div class="w-8 h-8 bg-success rounded-full flex items-center justify-center">
+                <i class="fas fa-check text-white text-sm"></i>
+            </div>
+            <div>
+                <p class="font-medium text-gray-900">Email processed successfully</p>
+                <p class="text-sm text-gray-500">The sender has been added to your inbox</p>
+            </div>
+            <button class="text-gray-400 hover:text-gray-600" onclick="hideNotification()">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+    </div>
+    <!-- @END_COMPONENT: NotificationToast -->
+
+    <script>
+        // TODO: Implement Gmail API integration for real-time email monitoring
+        // TODO: Implement Stripe webhook handlers for payment verification
+        // TODO: Implement contact management system with CRUD operations
+        // TODO: Add real-time notifications for new emails and donations
+
+        (function() {
+            'use strict';
+            
+            // Mock data for demonstration
+            const mockStats = {
+                emailsFiltered: 147,
+                pendingDonations: 23,
+                donationsReceived: 89,
+                knownContacts: 342
+            };
+
+            // Simulate real-time updates
+            function updateStats() {
+                // TODO: Replace with actual API calls to backend
+                console.log('Updating stats...', mockStats);
+            }
+
+            // Handle quick action buttons
+            function handleQuickActions() {
+                document.addEventListener('click', function(e) {
+                    const target = e.target.closest('[data-event^="click:"]');
+                    if (!target) return;
+
+                    const action = target.dataset.event.replace('click:', '');
+                    
+                    switch(action) {
+                        case 'addContact':
+                            // TODO: Open add contact modal
+                            console.log('Opening add contact modal');
+                            break;
+                        case 'bulkActions':
+                            // TODO: Navigate to bulk actions page
+                            console.log('Opening bulk actions');
+                            break;
+                        case 'exportData':
+                            // TODO: Trigger data export
+                            console.log('Starting data export');
+                            break;
+                        case 'viewEmail':
+                            // TODO: Open email preview modal
+                            console.log('Opening email preview');
+                            break;
+                        case 'viewAllPending':
+                            // TODO: Navigate to pending emails page
+                            console.log('Navigating to pending emails');
+                            break;
+                    }
+                });
+            }
+
+            function showNotification(message, type = 'success') {
+                const toast = document.getElementById('notification-toast');
+                // TODO: Implement dynamic notification content
+                toast.classList.remove('hidden');
+                
+                setTimeout(() => {
+                    toast.classList.add('hidden');
+                }, 5000);
+            }
+
+            window.hideNotification = function() {
+                document.getElementById('notification-toast').classList.add('hidden');
+            };
+
+            // Initialize the application
+            function init() {
+                handleQuickActions();
+                
+                // Simulate periodic updates
+                setInterval(updateStats, 30000); // Update every 30 seconds
+                
+                console.log('Email Guardian Dashboard initialized');
+            }
+
+            // Start the application when DOM is ready
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', init);
+            } else {
+                init();
+            }
+        })();
+    </script>
+</body>
+</html>
