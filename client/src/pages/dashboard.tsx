@@ -1,4 +1,5 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useState } from "react";
 import { Sidebar } from "@/components/ui/sidebar";
 import { StatsCard } from "@/components/ui/stats-card";
 import { EmailItem } from "@/components/ui/email-item";
@@ -6,24 +7,167 @@ import { DonationItem } from "@/components/ui/donation-item";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/use-auth";
 import { 
-  Shield, 
   Filter, 
   Clock, 
   DollarSign, 
   Users, 
   UserPlus, 
-  CheckSquare, 
-  Download,
   CheckCircle,
   RotateCcw,
-  Server
+  Heart,
+  Play
 } from "lucide-react";
 
 export default function Dashboard() {
   const { user } = useAuth();
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const [contactDialogOpen, setContactDialogOpen] = useState(false);
+  const [intervalDialogOpen, setIntervalDialogOpen] = useState(false);
+  const [charityDialogOpen, setCharityDialogOpen] = useState(false);
+  const [newContactEmail, setNewContactEmail] = useState("");
+  const [newInterval, setNewInterval] = useState(user?.emailCheckInterval || "1.0");
+  const [newCharityName, setNewCharityName] = useState(user?.charityName || "Email Guardian");
+
+  // Manual sync mutation
+  const manualSyncMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", "/api/manual-sync");
+      return res.json();
+    },
+    onSuccess: () => {
+      toast({
+        title: "Email filtering started",
+        description: "Checking for new emails now...",
+      });
+      // Refresh dashboard stats
+      queryClient.invalidateQueries({ queryKey: ["/api/dashboard/stats"] });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Sync failed",
+        description: error.message || "Could not start manual sync",
+        variant: "destructive",
+      });
+    }
+  });
+
+  // Add contact mutation
+  const addContactMutation = useMutation({
+    mutationFn: async (email: string) => {
+      const res = await apiRequest("POST", "/api/contacts", {
+        email: email.trim(),
+        isWhitelisted: true
+      });
+      return res.json();
+    },
+    onSuccess: () => {
+      toast({
+        title: "Contact added",
+        description: `${newContactEmail} has been whitelisted`,
+      });
+      setNewContactEmail("");
+      setContactDialogOpen(false);
+      queryClient.invalidateQueries({ queryKey: ["/api/dashboard/stats"] });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Failed to add contact",
+        description: error.message || "Could not add contact",
+        variant: "destructive",
+      });
+    }
+  });
+
+  // Update interval mutation
+  const updateIntervalMutation = useMutation({
+    mutationFn: async (interval: string) => {
+      const res = await apiRequest("PUT", `/api/user/${user?.id}/email-interval`, {
+        emailCheckInterval: parseFloat(interval)
+      });
+      return res.json();
+    },
+    onSuccess: () => {
+      toast({
+        title: "Interval updated",
+        description: `Email checking interval set to ${newInterval} minutes`,
+      });
+      setIntervalDialogOpen(false);
+      queryClient.invalidateQueries({ queryKey: ["/api/user"] });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Failed to update interval",
+        description: error.message || "Could not update interval",
+        variant: "destructive",
+      });
+    }
+  });
+
+  // Update charity name mutation
+  const updateCharityMutation = useMutation({
+    mutationFn: async (charityName: string) => {
+      const res = await apiRequest("PUT", `/api/user/${user?.id}/charity-name`, {
+        charityName: charityName.trim()
+      });
+      return res.json();
+    },
+    onSuccess: () => {
+      toast({
+        title: "Charity name updated",
+        description: `Charity name set to "${newCharityName}"`,
+      });
+      setCharityDialogOpen(false);
+      queryClient.invalidateQueries({ queryKey: ["/api/user"] });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Failed to update charity name", 
+        description: error.message || "Could not update charity name",
+        variant: "destructive",
+      });
+    }
+  });
+
+  const handleManualSync = () => {
+    manualSyncMutation.mutate();
+  };
+
+  const handleAddContact = () => {
+    if (!newContactEmail.trim()) {
+      toast({
+        title: "Email required",
+        description: "Please enter a valid email address",
+        variant: "destructive",
+      });
+      return;
+    }
+    addContactMutation.mutate(newContactEmail);
+  };
+
+  const handleUpdateInterval = () => {
+    updateIntervalMutation.mutate(newInterval);
+  };
+
+  const handleUpdateCharity = () => {
+    if (!newCharityName.trim()) {
+      toast({
+        title: "Charity name required",
+        description: "Please enter a charity name",
+        variant: "destructive",
+      });
+      return;
+    }
+    updateCharityMutation.mutate(newCharityName);
+  };
 
   const { data: stats, isLoading: statsLoading } = useQuery({
     queryKey: ["/api/dashboard/stats", user?.id],
@@ -82,9 +226,15 @@ export default function Dashboard() {
               icon={Filter}
               iconColor="text-blue-600"
               iconBg="bg-blue-50"
-              trend="+12%"
+              trend={
+                stats?.emailsFilteredYesterday > 0 
+                  ? `${Math.round(((stats?.emailsFiltered || 0) - stats?.emailsFilteredYesterday) / stats?.emailsFilteredYesterday * 100)}%`
+                  : stats?.emailsFiltered > 0 ? "+100%" : "0%"
+              }
               trendText="from yesterday"
-              trendType="positive"
+              trendType={
+                (stats?.emailsFiltered || 0) >= (stats?.emailsFilteredYesterday || 0) ? "positive" : "negative"
+              }
             />
             
             <StatsCard
@@ -93,28 +243,74 @@ export default function Dashboard() {
               icon={Clock}
               iconColor="text-orange-600"
               iconBg="bg-orange-50"
-              subtext={`$${stats?.pendingDonations || 0}.00 potential revenue`}
+              subtext={`$${(stats?.pendingDonationsRevenue || 0).toFixed(2)} potential revenue`}
             />
             
             <StatsCard
               title="Donations Received"
-              value={`$${stats?.donationsReceived || 0}`}
+              value={`$${(stats?.donationsReceived || 0).toFixed(2)}`}
               icon={DollarSign}
               iconColor="text-green-600"
               iconBg="bg-green-50"
-              subtext={`${Math.floor(stats?.donationsReceived || 0)} successful donations this month`}
+              subtext={`${stats?.donationsCount || 0} successful donations this month`}
             />
             
-            <StatsCard
-              title="Known Contacts"
-              value={stats?.knownContacts || 0}
-              icon={Users}
-              iconColor="text-purple-600"
-              iconBg="bg-purple-50"
-              trend="+5 added"
-              trendText="this week"
-              trendType="positive"
-            />
+            <div className="relative">
+              <StatsCard
+                title="Known Contacts"
+                value={stats?.knownContacts || 0}
+                icon={Users}
+                iconColor="text-purple-600"
+                iconBg="bg-purple-50"
+                trend={
+                  stats?.contactsAddedThisWeek > 0 
+                    ? `+${stats?.contactsAddedThisWeek} added`
+                    : "No new contacts"
+                }
+                trendText="this week"
+                trendType={stats?.contactsAddedThisWeek > 0 ? "positive" : "neutral"}
+              />
+              <Dialog open={contactDialogOpen} onOpenChange={setContactDialogOpen}>
+                <DialogTrigger asChild>
+                  <Button 
+                    size="sm"
+                    className="absolute bottom-4 right-4 h-8 w-8 p-0 bg-blue-600 hover:bg-blue-700"
+                    data-testid="button-add-contact"
+                  >
+                    <UserPlus size={16} />
+                  </Button>
+                </DialogTrigger>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>Add Contact</DialogTitle>
+                    <DialogDescription>
+                      Add an email address to your whitelist so their messages go directly to your inbox.
+                    </DialogDescription>
+                  </DialogHeader>
+                  <div className="space-y-4">
+                    <div>
+                      <Label htmlFor="email">Email Address</Label>
+                      <Input
+                        id="email"
+                        type="email"
+                        placeholder="contact@example.com"
+                        value={newContactEmail}
+                        onChange={(e) => setNewContactEmail(e.target.value)}
+                        data-testid="input-contact-email"
+                      />
+                    </div>
+                    <div className="flex justify-end space-x-2">
+                      <Button variant="outline" onClick={() => setContactDialogOpen(false)}>
+                        Cancel
+                      </Button>
+                      <Button onClick={handleAddContact} data-testid="button-save-contact">
+                        Add Contact
+                      </Button>
+                    </div>
+                  </div>
+                </DialogContent>
+              </Dialog>
+            </div>
           </div>
 
           {/* Email Queue and Recent Donations */}
@@ -193,45 +389,7 @@ export default function Dashboard() {
             </Card>
           </div>
 
-          {/* Quick Actions */}
-          <Card className="mb-8">
-            <CardHeader>
-              <CardTitle>Quick Actions</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <Button variant="outline" className="flex items-center space-x-3 p-4 h-auto justify-start">
-                  <div className="w-10 h-10 bg-blue-50 rounded-lg flex items-center justify-center">
-                    <UserPlus className="text-blue-600" size={20} />
-                  </div>
-                  <div className="text-left">
-                    <p className="font-medium text-gray-900">Add Contact</p>
-                    <p className="text-sm text-gray-500">Whitelist a new email address</p>
-                  </div>
-                </Button>
 
-                <Button variant="outline" className="flex items-center space-x-3 p-4 h-auto justify-start">
-                  <div className="w-10 h-10 bg-green-50 rounded-lg flex items-center justify-center">
-                    <CheckSquare className="text-green-600" size={20} />
-                  </div>
-                  <div className="text-left">
-                    <p className="font-medium text-gray-900">Bulk Actions</p>
-                    <p className="text-sm text-gray-500">Process multiple emails at once</p>
-                  </div>
-                </Button>
-
-                <Button variant="outline" className="flex items-center space-x-3 p-4 h-auto justify-start">
-                  <div className="w-10 h-10 bg-purple-50 rounded-lg flex items-center justify-center">
-                    <Download className="text-purple-600" size={20} />
-                  </div>
-                  <div className="text-left">
-                    <p className="font-medium text-gray-900">Export Data</p>
-                    <p className="text-sm text-gray-500">Download donation reports</p>
-                  </div>
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
 
           {/* System Status */}
           <Card>
@@ -239,38 +397,120 @@ export default function Dashboard() {
               <CardTitle>System Status</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                <div className="text-center">
-                  <div className="w-12 h-12 bg-green-50 rounded-full flex items-center justify-center mx-auto mb-3">
-                    <CheckCircle className="text-green-600" size={24} />
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <Button 
+                  variant="outline" 
+                  className="flex flex-col items-center space-y-3 p-6 h-auto"
+                  onClick={handleManualSync}
+                  data-testid="button-manual-sync"
+                >
+                  <div className="w-12 h-12 bg-green-50 rounded-full flex items-center justify-center">
+                    <Play className="text-green-600" size={24} />
                   </div>
-                  <p className="font-medium text-gray-900">Gmail API</p>
-                  <p className="text-sm text-green-600">Connected</p>
-                </div>
+                  <div className="text-center">
+                    <p className="font-medium text-gray-900">Gmail API</p>
+                    <p className="text-sm text-green-600">Run Filter Now</p>
+                  </div>
+                </Button>
 
-                <div className="text-center">
-                  <div className="w-12 h-12 bg-green-50 rounded-full flex items-center justify-center mx-auto mb-3">
-                    <CheckCircle className="text-green-600" size={24} />
-                  </div>
-                  <p className="font-medium text-gray-900">Stripe Webhooks</p>
-                  <p className="text-sm text-green-600">Active</p>
-                </div>
+                <Dialog open={intervalDialogOpen} onOpenChange={setIntervalDialogOpen}>
+                  <DialogTrigger asChild>
+                    <Button 
+                      variant="outline" 
+                      className="flex flex-col items-center space-y-3 p-6 h-auto"
+                      data-testid="button-edit-interval"
+                    >
+                      <div className="w-12 h-12 bg-blue-50 rounded-full flex items-center justify-center">
+                        <RotateCcw className="text-blue-600" size={24} />
+                      </div>
+                      <div className="text-center">
+                        <p className="font-medium text-gray-900">Auto-Sync</p>
+                        <p className="text-sm text-blue-600">Every {user?.emailCheckInterval || 1} min</p>
+                      </div>
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent>
+                    <DialogHeader>
+                      <DialogTitle>Email Check Interval</DialogTitle>
+                      <DialogDescription>
+                        Configure how often the system should check for new emails to filter.
+                      </DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-4">
+                      <div>
+                        <Label htmlFor="interval">Check Emails Every</Label>
+                        <Select value={newInterval} onValueChange={setNewInterval}>
+                          <SelectTrigger data-testid="select-interval">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="0.5">30 seconds</SelectItem>
+                            <SelectItem value="1.0">1 minute</SelectItem>
+                            <SelectItem value="5.0">5 minutes</SelectItem>
+                            <SelectItem value="15.0">15 minutes</SelectItem>
+                            <SelectItem value="30.0">30 minutes</SelectItem>
+                            <SelectItem value="60.0">1 hour</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="flex justify-end space-x-2">
+                        <Button variant="outline" onClick={() => setIntervalDialogOpen(false)}>
+                          Cancel
+                        </Button>
+                        <Button onClick={handleUpdateInterval} data-testid="button-save-interval">
+                          Update Interval
+                        </Button>
+                      </div>
+                    </div>
+                  </DialogContent>
+                </Dialog>
 
-                <div className="text-center">
-                  <div className="w-12 h-12 bg-green-50 rounded-full flex items-center justify-center mx-auto mb-3">
-                    <RotateCcw className="text-green-600" size={24} />
-                  </div>
-                  <p className="font-medium text-gray-900">Auto-Sync</p>
-                  <p className="text-sm text-green-600">Every 5 minutes</p>
-                </div>
-
-                <div className="text-center">
-                  <div className="w-12 h-12 bg-green-50 rounded-full flex items-center justify-center mx-auto mb-3">
-                    <Server className="text-green-600" size={24} />
-                  </div>
-                  <p className="font-medium text-gray-900">Server Status</p>
-                  <p className="text-sm text-green-600">Operational</p>
-                </div>
+                <Dialog open={charityDialogOpen} onOpenChange={setCharityDialogOpen}>
+                  <DialogTrigger asChild>
+                    <Button 
+                      variant="outline" 
+                      className="flex flex-col items-center space-y-3 p-6 h-auto"
+                      data-testid="button-edit-charity"
+                    >
+                      <div className="w-12 h-12 bg-purple-50 rounded-full flex items-center justify-center">
+                        <Heart className="text-purple-600" size={24} />
+                      </div>
+                      <div className="text-center">
+                        <p className="font-medium text-gray-900">Charity</p>
+                        <p className="text-sm text-purple-600">{user?.charityName || 'Email Guardian'}</p>
+                      </div>
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent>
+                    <DialogHeader>
+                      <DialogTitle>Update Charity Name</DialogTitle>
+                      <DialogDescription>
+                        Set the charity name that appears in donation requests sent to unknown senders.
+                      </DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-4">
+                      <div>
+                        <Label htmlFor="charityName">Charity Name</Label>
+                        <Input
+                          id="charityName"
+                          type="text"
+                          placeholder="Your Charity Name"
+                          value={newCharityName}
+                          onChange={(e) => setNewCharityName(e.target.value)}
+                          data-testid="input-charity-name"
+                        />
+                      </div>
+                      <div className="flex justify-end space-x-2">
+                        <Button variant="outline" onClick={() => setCharityDialogOpen(false)}>
+                          Cancel
+                        </Button>
+                        <Button onClick={handleUpdateCharity} data-testid="button-save-charity">
+                          Update Name
+                        </Button>
+                      </div>
+                    </div>
+                  </DialogContent>
+                </Dialog>
               </div>
             </CardContent>
           </Card>

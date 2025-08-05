@@ -161,6 +161,67 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Update user email interval (new route for dashboard)
+  app.put("/api/user/:id/email-interval", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { emailCheckInterval } = req.body;
+      
+      if (!emailCheckInterval || emailCheckInterval < 0.5 || emailCheckInterval > 60) {
+        return res.status(400).json({ message: "Interval must be between 0.5 and 60 minutes" });
+      }
+      
+      const user = await storage.updateUserEmailCheckInterval(id, emailCheckInterval);
+      res.json({ message: "Email check interval updated", user });
+    } catch (error: any) {
+      res.status(500).json({ message: "Error updating email check interval: " + error.message });
+    }
+  });
+
+  // Update charity name (new route for dashboard)
+  app.put("/api/user/:id/charity-name", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { charityName } = req.body;
+      
+      if (!charityName || charityName.trim().length === 0) {
+        return res.status(400).json({ message: "Charity name cannot be empty" });
+      }
+      
+      const user = await storage.updateUserCharityName(id, charityName.trim());
+      res.json({ message: "Charity name updated", user });
+    } catch (error: any) {
+      res.status(500).json({ message: "Error updating charity name: " + error.message });
+    }
+  });
+
+  // Manual sync endpoint  
+  app.post("/api/manual-sync", async (req, res) => {
+    try {
+      // For now, we'll just trigger processing for all users
+      const users = await storage.getAllUsers();
+      
+      for (const user of users) {
+        if (user.gmailToken) {
+          try {
+            const { EmailProcessor } = await import('./services/email-processor');
+            const emailProcessor = new EmailProcessor();
+            await emailProcessor.processNewEmails(user);
+            
+            // Update last check time
+            await storage.updateUserLastEmailCheck(user.id, new Date());
+          } catch (error: any) {
+            console.error(`Error processing emails for user ${user.id}:`, error.message);
+          }
+        }
+      }
+      
+      res.json({ message: "Manual sync initiated for all users" });
+    } catch (error: any) {
+      res.status(500).json({ message: "Error during manual sync: " + error.message });
+    }
+  });
+
   // Gmail OAuth routes
   app.get("/api/auth/gmail", async (req, res) => {
     try {

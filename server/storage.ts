@@ -8,7 +8,7 @@ import {
   type PaymentIntention, type InsertPaymentIntention
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, desc, and, gte, lte } from "drizzle-orm";
+import { eq, desc, and, gte, lte, sql } from "drizzle-orm";
 
 export interface IStorage {
   // User methods
@@ -289,16 +289,31 @@ export class DatabaseStorage implements IStorage {
 
   async getDashboardStats(userId: string): Promise<{
     emailsFiltered: number;
+    emailsFilteredYesterday: number;
     pendingDonations: number;
+    pendingDonationsRevenue: number;
     donationsReceived: number;
+    donationsCount: number;
     knownContacts: number;
+    contactsAddedThisWeek: number;
   }> {
     // Get today's stats
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     
+    // Get yesterday's stats
+    const yesterday = new Date(today);
+    yesterday.setDate(yesterday.getDate() - 1);
+    
+    // Get week start (7 days ago)
+    const weekStart = new Date(today);
+    weekStart.setDate(weekStart.getDate() - 7);
+    
     const todayStats = await this.getEmailStats(userId, today);
-    const pendingCount = await db
+    const yesterdayStats = await this.getEmailStats(userId, yesterday);
+    
+    // Get all pending emails (not just count)
+    const pendingEmailsList = await db
       .select()
       .from(pendingEmails)
       .where(and(eq(pendingEmails.userId, userId), eq(pendingEmails.status, "pending")));
@@ -312,15 +327,28 @@ export class DatabaseStorage implements IStorage {
       .select()
       .from(contacts)
       .where(eq(contacts.userId, userId));
+      
+    // Get contacts added this week
+    const recentContacts = await db
+      .select()
+      .from(contacts)
+      .where(and(
+        eq(contacts.userId, userId),
+        sql`${contacts.createdAt} >= ${weekStart}`
+      ));
 
     const totalDonationAmount = totalDonations.reduce((sum, donation) => 
       sum + parseFloat(donation.amount), 0);
 
     return {
       emailsFiltered: todayStats ? parseInt(todayStats.emailsFiltered || "0") : 0,
-      pendingDonations: pendingCount.length,
+      emailsFilteredYesterday: yesterdayStats ? parseInt(yesterdayStats.emailsFiltered || "0") : 0,
+      pendingDonations: pendingEmailsList.length,
+      pendingDonationsRevenue: pendingEmailsList.length * 1.0, // $1 per pending donation
       donationsReceived: totalDonationAmount,
+      donationsCount: totalDonations.length,
       knownContacts: contactCount.length,
+      contactsAddedThisWeek: recentContacts.length,
     };
   }
 
