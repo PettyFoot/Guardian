@@ -61,6 +61,7 @@ export default function Settings() {
   const [autoProcessing, setAutoProcessing] = useState(true);
   const [donationAmount, setDonationAmount] = useState("1.00");
   const [emailCheckInterval, setEmailCheckInterval] = useState("1.0");
+  const [charityName, setCharityName] = useState("");
   const [autoReplyTemplate, setAutoReplyTemplate] = useState(`Hello,
 
 Thank you for your email. To help manage my inbox and reduce spam, I use an email filtering system that requires a small $1 donation for unknown senders to ensure your message reaches me.
@@ -78,10 +79,13 @@ Email Guardian System`);
 
   const { toast } = useToast();
 
-  // Load user's current email check interval
+  // Load user's current settings
   useEffect(() => {
     if ((user as any)?.emailCheckInterval) {
       setEmailCheckInterval((user as any).emailCheckInterval);
+    }
+    if ((user as any)?.charityName) {
+      setCharityName((user as any).charityName);
     }
   }, [user]);
 
@@ -124,6 +128,39 @@ Email Guardian System`);
     setEmailCheckInterval(value);
     const intervalMinutes = parseFloat(value);
     updateIntervalMutation.mutate(intervalMinutes);
+  };
+
+  const updateCharityNameMutation = useMutation({
+    mutationFn: async (newCharityName: string) => {
+      const res = await apiRequest("PATCH", `/api/user/${user?.id}/charity-name`, { 
+        charityName: newCharityName 
+      });
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.message || 'Failed to update charity name');
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      toast({
+        title: "Charity Name Updated",
+        description: "Your charity name has been updated successfully.",
+      });
+      queryClient.invalidateQueries({ queryKey: [`/api/user/${user?.id}`] });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to update charity name",
+        variant: "destructive",
+      });
+    }
+  });
+
+  const handleCharityNameSave = () => {
+    if (charityName.trim()) {
+      updateCharityNameMutation.mutate(charityName.trim());
+    }
   };
 
   const revokeGmailMutation = useMutation({
@@ -306,6 +343,32 @@ Email Guardian System`);
                   onChange={(e) => setDonationAmount(e.target.value)}
                   className="w-32"
                 />
+              </div>
+
+              <div>
+                <Label htmlFor="charity-name" className="text-base font-medium">Charity Name</Label>
+                <p className="text-sm text-gray-500 mb-2">The name shown to senders in payment requests (e.g., "Donation to [Your Charity]")</p>
+                <div className="flex items-center space-x-2 max-w-md">
+                  <Input
+                    id="charity-name"
+                    type="text"
+                    value={charityName}
+                    onChange={(e) => setCharityName(e.target.value)}
+                    placeholder="Email Guardian"
+                    data-testid="input-charity-name"
+                  />
+                  <Button 
+                    onClick={handleCharityNameSave} 
+                    variant="outline" 
+                    size="sm"
+                    disabled={updateCharityNameMutation.isPending || !charityName.trim()}
+                    data-testid="button-save-charity-name"
+                  >
+                    <Save size={16} className="mr-1" />
+                    {updateCharityNameMutation.isPending ? 'Saving...' : 'Save'}
+                  </Button>
+                </div>
+                <p className="text-sm text-gray-400 mt-1">This appears in Stripe payment descriptions</p>
               </div>
             </CardContent>
           </Card>

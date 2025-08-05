@@ -28,27 +28,30 @@ The system uses React for the frontend with shadcn/ui components, Express.js for
 🎯 **Ready for Use:** 
 The application is fully functional and ready for deployment once API credentials are provided.
 
-## Recent Changes (January 4, 2025)
-- **Email Processing Improvements:**
-  - Changed default email check interval from 5 minutes to 1 minute
-  - Added user-configurable email check intervals (30 seconds to 1 hour)
-  - Enhanced email processor to check emails since last check time (not just unread)
-  - Added API endpoint for updating email check intervals
-  - Updated scheduler to check every 30 seconds for more responsive per-user intervals
-  - Added database fields for storing last check time and user preferences
+## Recent Changes (January 5, 2025)
+- **Dynamic Payment Link System:**
+  - Implemented dynamic Stripe payment links with custom charity names
+  - Added payment_intentions table to track sender-to-recipient payment mapping
+  - Enhanced webhook handling for dynamic payments with automatic sender whitelisting
+  - Created payment success page with detailed confirmation messaging
+  - Integrated charity name customization in user settings
 
-- **Stripe Payment Integration:**
-  - Integrated full Stripe payment processing for $1 donations
-  - Added payment link creation and webhook handling
-  - Enhanced auto-reply emails with real Stripe payment URLs
-  - Created checkout page with Stripe Elements
-  - Added business website page for Stripe verification compliance
+- **Database Schema Updates:**
+  - Added charityName field to users table with default "Email Guardian"
+  - Created payment_intentions table for tracking dynamic payment links
+  - Enhanced storage interface with payment intention management methods
+  - Added API endpoints for charity name updates and payment intention tracking
 
-- **Auto-Reply Fixes:**
-  - Fixed infinite loop bug causing duplicate "Re: Re:" auto-replies
-  - Added comprehensive email filtering to skip system emails
-  - Created cleanup tools for removing duplicate auto-reply emails
-  - Enhanced Gmail search queries to exclude sent emails and self-replies
+- **Email Processing Enhancements:**
+  - Updated email processor to use dynamic payment links with user's charity name
+  - Enhanced auto-reply template to include personalized charity names
+  - Improved fallback system for payment link generation
+  - Added automatic sender whitelisting upon successful payment completion
+
+- **Previous Updates (January 4, 2025):**
+  - Email Processing: Configurable check intervals (30 seconds to 1 hour)
+  - Stripe Integration: Full payment processing with webhooks
+  - Auto-Reply Fixes: Eliminated duplicate email issues
 
 ## User Preferences
 

@@ -125,31 +125,48 @@ export class EmailProcessor {
       await gmailService.addLabel(user.gmailToken!, messageId, pendingLabel.id);
     }
 
-    // Create Stripe payment link for the donation
+    // Create dynamic Stripe payment link for the donation
     try {
-      const paymentResponse = await fetch('http://localhost:5000/api/create-payment-link', {
+      const paymentResponse = await fetch('http://localhost:5000/api/create-dynamic-payment-link', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          amount: 1.00, // $1 donation
+          targetEmail: user.email,
           senderEmail,
-          pendingEmailId: pendingEmail.id,
-          userId: user.id
+          charityName: user.charityName || 'Email Guardian',
+          amount: 1.00 // $1 donation
         })
       });
       
       const paymentData = await paymentResponse.json();
       
-      if (paymentData.paymentUrl) {
+      if (paymentData.paymentLink) {
         // Update pending email with payment link
         await storage.updatePendingEmailDonationLink(pendingEmail.id, paymentData.paymentLinkId);
         
         // Send auto-reply with donation request
-        await this.sendDonationRequest(user, senderEmail, subject, paymentData.paymentUrl);
+        await this.sendDonationRequest(user, senderEmail, subject, paymentData.paymentLink);
       } else {
-        console.error('Failed to create payment link:', paymentData.message);
-        // Fallback to manual donation request
-        await this.sendDonationRequest(user, senderEmail, subject, 'Please contact us for payment instructions.');
+        console.error('Failed to create dynamic payment link:', paymentData.message);
+        // Fallback to regular payment link
+        const fallbackResponse = await fetch('http://localhost:5000/api/create-payment-link', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            amount: 1.00,
+            senderEmail,
+            pendingEmailId: pendingEmail.id,
+            userId: user.id
+          })
+        });
+        
+        const fallbackData = await fallbackResponse.json();
+        if (fallbackData.paymentUrl) {
+          await storage.updatePendingEmailDonationLink(pendingEmail.id, fallbackData.paymentLinkId);
+          await this.sendDonationRequest(user, senderEmail, subject, fallbackData.paymentUrl);
+        } else {
+          await this.sendDonationRequest(user, senderEmail, subject, 'Please contact us for payment instructions.');
+        }
       }
     } catch (error: any) {
       console.error('Error creating payment link:', error.message);
@@ -176,12 +193,13 @@ export class EmailProcessor {
 
   private async sendDonationRequest(user: User, senderEmail: string, originalSubject: string, donationUrl: string) {
     const subject = `Re: ${originalSubject} - Email Access Request`;
+    const charityName = user.charityName || 'Email Guardian';
     const body = `
 Hello,
 
 Thank you for your email. To help manage my inbox and reduce spam, I use an email filtering system that requires a small $1 donation for unknown senders to ensure your message reaches me.
 
-This one-time payment grants you permanent access to my inbox for future emails.
+This one-time payment to ${charityName} grants you permanent access to my inbox for future emails.
 
 To complete your donation and have your email delivered:
 
@@ -192,7 +210,7 @@ Once your payment is confirmed:
 - You'll be added to my known contacts list for future emails
 - All future emails from you will bypass the filtering system
 
-This filtering system helps reduce spam while ensuring legitimate emails reach me. Thank you for understanding!
+This filtering system helps reduce spam while ensuring legitimate emails reach me. Thank you for understanding and for supporting ${charityName}!
 
 Best regards,
 Email Guardian System

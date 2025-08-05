@@ -1,10 +1,11 @@
 import { 
-  users, contacts, pendingEmails, donations, emailStats,
+  users, contacts, pendingEmails, donations, emailStats, paymentIntentions,
   type User, type InsertUser,
   type Contact, type InsertContact,
   type PendingEmail, type InsertPendingEmail,
   type Donation, type InsertDonation,
-  type EmailStats, type InsertEmailStats
+  type EmailStats, type InsertEmailStats,
+  type PaymentIntention, type InsertPaymentIntention
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, and, gte, lte } from "drizzle-orm";
@@ -19,6 +20,7 @@ export interface IStorage {
   updateUserStripeCustomerId(id: string, customerId: string): Promise<User>;
   updateUserLastEmailCheck(id: string, lastCheck: Date): Promise<User>;
   updateUserEmailCheckInterval(id: string, intervalMinutes: number): Promise<User>;
+  updateUserCharityName(id: string, charityName: string): Promise<User>;
   deleteUser(id: string): Promise<void>;
 
   // Contact methods
@@ -51,6 +53,12 @@ export interface IStorage {
     donationsReceived: number;
     knownContacts: number;
   }>;
+
+  // Payment intention methods
+  createPaymentIntention(intention: InsertPaymentIntention): Promise<PaymentIntention>;
+  getPaymentIntentionByStripeLink(linkId: string): Promise<PaymentIntention | undefined>;
+  updatePaymentIntentionStatus(id: string, status: string, sessionId?: string): Promise<PaymentIntention>;
+  getPaymentIntentionsBySender(senderEmail: string, targetEmail: string): Promise<PaymentIntention[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -107,6 +115,15 @@ export class DatabaseStorage implements IStorage {
     const [user] = await db
       .update(users)
       .set({ emailCheckInterval: intervalMinutes.toString() })
+      .where(eq(users.id, id))
+      .returning();
+    return user;
+  }
+
+  async updateUserCharityName(id: string, charityName: string): Promise<User> {
+    const [user] = await db
+      .update(users)
+      .set({ charityName })
       .where(eq(users.id, id))
       .returning();
     return user;
@@ -286,6 +303,51 @@ export class DatabaseStorage implements IStorage {
       donationsReceived: totalDonationAmount,
       knownContacts: contactCount.length,
     };
+  }
+
+  // Payment intention methods
+  async createPaymentIntention(intention: InsertPaymentIntention): Promise<PaymentIntention> {
+    const [created] = await db
+      .insert(paymentIntentions)
+      .values(intention)
+      .returning();
+    return created;
+  }
+
+  async getPaymentIntentionByStripeLink(linkId: string): Promise<PaymentIntention | undefined> {
+    const [intention] = await db
+      .select()
+      .from(paymentIntentions)
+      .where(eq(paymentIntentions.stripePaymentLinkId, linkId));
+    return intention || undefined;
+  }
+
+  async updatePaymentIntentionStatus(id: string, status: string, sessionId?: string): Promise<PaymentIntention> {
+    const updateData: any = { status };
+    if (sessionId) {
+      updateData.stripeSessionId = sessionId;
+    }
+    if (status === 'paid') {
+      updateData.paidAt = new Date();
+    }
+
+    const [updated] = await db
+      .update(paymentIntentions)
+      .set(updateData)
+      .where(eq(paymentIntentions.id, id))
+      .returning();
+    return updated;
+  }
+
+  async getPaymentIntentionsBySender(senderEmail: string, targetEmail: string): Promise<PaymentIntention[]> {
+    return await db
+      .select()
+      .from(paymentIntentions)
+      .where(and(
+        eq(paymentIntentions.senderEmail, senderEmail),
+        eq(paymentIntentions.targetEmail, targetEmail)
+      ))
+      .orderBy(desc(paymentIntentions.createdAt));
   }
 }
 

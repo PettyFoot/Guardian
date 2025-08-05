@@ -129,6 +129,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.patch("/api/user/:id/charity-name", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { charityName } = req.body;
+      
+      if (!charityName || charityName.trim().length === 0) {
+        return res.status(400).json({ message: "Charity name cannot be empty" });
+      }
+      
+      const user = await storage.updateUserCharityName(id, charityName.trim());
+      res.json({ message: "Charity name updated", user });
+    } catch (error: any) {
+      res.status(500).json({ message: "Error updating charity name: " + error.message });
+    }
+  });
+
   // Gmail OAuth routes
   app.get("/api/auth/gmail", async (req, res) => {
     try {
@@ -426,6 +442,71 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Create dynamic payment link for sender to access user's inbox
+  app.post("/api/create-dynamic-payment-link", async (req, res) => {
+    try {
+      const { targetEmail, senderEmail, charityName, amount = 1.00 } = req.body;
+      
+      if (!targetEmail || !senderEmail) {
+        return res.status(400).json({ message: "Target email and sender email are required" });
+      }
+
+      // Find the target user
+      const targetUser = await storage.getUserByEmail(targetEmail);
+      if (!targetUser) {
+        return res.status(404).json({ message: "User not found" });
+      }
+
+      // Create Stripe payment link
+      const paymentLink = await stripe.paymentLinks.create({
+        line_items: [
+          {
+            price_data: {
+              currency: 'usd',
+              product_data: {
+                name: `Email Access to ${targetEmail}`,
+                description: `Donation to ${charityName || targetUser.charityName || 'Email Guardian'} for inbox access`,
+              },
+              unit_amount: Math.round(amount * 100), // Convert to cents
+            },
+            quantity: 1,
+          },
+        ],
+        metadata: {
+          targetEmail,
+          senderEmail,
+          userId: targetUser.id,
+          type: 'inbox_access'
+        },
+        after_completion: {
+          type: 'redirect',
+          redirect: {
+            url: `${process.env.VITE_APP_URL || 'https://emailguardian.com'}/payment-success?sender=${encodeURIComponent(senderEmail)}&target=${encodeURIComponent(targetEmail)}`
+          }
+        },
+      });
+
+      // Store payment intention
+      await storage.createPaymentIntention({
+        userId: targetUser.id,
+        senderEmail,
+        targetEmail,
+        stripePaymentLinkId: paymentLink.id,
+        amount: amount.toString(),
+        status: 'pending',
+        metadata: { charityName: charityName || targetUser.charityName }
+      });
+
+      res.json({ 
+        paymentLink: paymentLink.url,
+        paymentLinkId: paymentLink.id 
+      });
+    } catch (error: any) {
+      console.error('Error creating dynamic payment link:', error);
+      res.status(500).json({ message: "Error creating payment link: " + error.message });
+    }
+  });
+
   // Stripe webhooks for payment completion
   app.post("/api/webhooks/stripe", async (req, res) => {
     const sig = req.headers['stripe-signature'];
@@ -446,12 +527,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const paymentIntent = event.data.object;
         if (paymentIntent.metadata?.type === 'email_access_donation') {
           await handlePaymentSuccess(paymentIntent.metadata);
+        } else if (paymentIntent.metadata?.type === 'inbox_access') {
+          await handleDynamicPaymentSuccess(paymentIntent.metadata, paymentIntent.id);
         }
         break;
       case 'checkout.session.completed':
         const session = event.data.object;
         if (session.metadata?.type === 'email_access_donation') {
           await handlePaymentSuccess(session.metadata);
+        } else if (session.metadata?.type === 'inbox_access') {
+          await handleDynamicPaymentSuccess(session.metadata, session.id);
         }
         break;
       default:
@@ -482,6 +567,48 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.log(`Email access granted to ${senderEmail}`);
     } catch (error: any) {
       console.error('Error handling payment success:', error.message);
+    }
+  }
+
+  async function handleDynamicPaymentSuccess(metadata: any, sessionId: string) {
+    try {
+      const { senderEmail, targetEmail, userId } = metadata;
+      
+      if (!senderEmail || !targetEmail || !userId) {
+        console.log('Missing metadata for dynamic payment success');
+        return;
+      }
+
+      console.log(`Dynamic payment successful for ${senderEmail} to access ${targetEmail}`);
+      
+      // Update payment intention status
+      const intentions = await storage.getPaymentIntentionsBySender(senderEmail, targetEmail);
+      if (intentions.length > 0) {
+        await storage.updatePaymentIntentionStatus(intentions[0].id, 'paid', sessionId);
+      }
+      
+      // Automatically whitelist the sender
+      const existingContact = await storage.getContactByEmail(userId, senderEmail);
+      if (!existingContact) {
+        await storage.createContact({
+          userId,
+          email: senderEmail,
+          name: senderEmail.split('@')[0], // Use email prefix as name
+          isWhitelisted: true
+        });
+        console.log(`Added ${senderEmail} to whitelist for ${targetEmail}`);
+      }
+      
+      // Import EmailProcessor to process any pending emails
+      const { EmailProcessor } = await import('./services/email-processor');
+      const emailProcessor = new EmailProcessor();
+      
+      // Process any pending emails from this sender
+      await emailProcessor.processDonationComplete(senderEmail, userId);
+      
+      console.log(`Dynamic email access granted to ${senderEmail} for ${targetEmail}`);
+    } catch (error: any) {
+      console.error('Error handling dynamic payment success:', error.message);
     }
   }
 

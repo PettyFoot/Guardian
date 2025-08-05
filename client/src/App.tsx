@@ -14,6 +14,7 @@ import SignIn from "@/pages/signin";
 import Demo from "@/pages/demo";
 import Checkout from "@/pages/checkout";
 import BusinessWebsite from "@/pages/business-website";
+import PaymentSuccess from "@/pages/payment-success";
 import NotFound from "@/pages/not-found";
 
 function ProtectedRoute({ component: Component }: { component: React.ComponentType }) {
@@ -52,6 +53,7 @@ function Router() {
       <Route path="/demo" component={Demo} />
       <Route path="/checkout" component={Checkout} />
       <Route path="/business" component={BusinessWebsite} />
+      <Route path="/payment-success" component={PaymentSuccess} />
       <Route path="/">
         {isAuthenticated ? <Dashboard /> : <Redirect to="/setup" />}
       </Route>

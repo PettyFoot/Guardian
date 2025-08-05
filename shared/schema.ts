@@ -12,6 +12,7 @@ export const users = pgTable("users", {
   stripeCustomerId: text("stripe_customer_id"),
   emailCheckInterval: decimal("email_check_interval", { precision: 5, scale: 1 }).default("1.0"), // in minutes
   lastEmailCheck: timestamp("last_email_check"),
+  charityName: text("charity_name").default("Email Guardian"),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
@@ -57,12 +58,27 @@ export const emailStats = pgTable("email_stats", {
   pendingDonations: decimal("pending_donations", { precision: 10, scale: 0 }).default("0"),
 });
 
+export const paymentIntentions = pgTable("payment_intentions", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  senderEmail: text("sender_email").notNull(),
+  targetEmail: text("target_email").notNull(), // The user's email being contacted
+  stripePaymentLinkId: text("stripe_payment_link_id").notNull(),
+  stripeSessionId: text("stripe_session_id"),
+  amount: decimal("amount", { precision: 10, scale: 2 }).default("1.00"),
+  status: text("status").notNull().default("pending"), // pending, paid, cancelled
+  metadata: json("metadata"), // Additional data like message context
+  createdAt: timestamp("created_at").defaultNow(),
+  paidAt: timestamp("paid_at"),
+});
+
 // Relations
 export const usersRelations = relations(users, ({ many }) => ({
   contacts: many(contacts),
   pendingEmails: many(pendingEmails),
   donations: many(donations),
   emailStats: many(emailStats),
+  paymentIntentions: many(paymentIntentions),
 }));
 
 export const contactsRelations = relations(contacts, ({ one }) => ({
@@ -98,6 +114,13 @@ export const emailStatsRelations = relations(emailStats, ({ one }) => ({
   }),
 }));
 
+export const paymentIntentionsRelations = relations(paymentIntentions, ({ one }) => ({
+  user: one(users, {
+    fields: [paymentIntentions.userId],
+    references: [users.id],
+  }),
+}));
+
 // Insert schemas
 export const insertUserSchema = createInsertSchema(users).omit({
   id: true,
@@ -122,6 +145,12 @@ export const insertEmailStatsSchema = createInsertSchema(emailStats).omit({
   id: true,
 });
 
+export const insertPaymentIntentionSchema = createInsertSchema(paymentIntentions).omit({
+  id: true,
+  createdAt: true,
+  paidAt: true,
+});
+
 // Types
 export type User = typeof users.$inferSelect;
 export type InsertUser = z.infer<typeof insertUserSchema>;
@@ -137,3 +166,6 @@ export type InsertDonation = z.infer<typeof insertDonationSchema>;
 
 export type EmailStats = typeof emailStats.$inferSelect;
 export type InsertEmailStats = z.infer<typeof insertEmailStatsSchema>;
+
+export type PaymentIntention = typeof paymentIntentions.$inferSelect;
+export type InsertPaymentIntention = z.infer<typeof insertPaymentIntentionSchema>;
