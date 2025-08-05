@@ -88,7 +88,7 @@ export class DatabaseStorage implements IStorage {
   async updateUserGmailTokens(id: string, token: string, refreshToken: string): Promise<User> {
     const [user] = await db
       .update(users)
-      .set({ gmailToken: token, gmailRefreshToken: refreshToken })
+      .set({ gmailToken: token, gmailRefreshToken: refreshToken, updatedAt: new Date() })
       .where(eq(users.id, id))
       .returning();
     return user;
@@ -97,7 +97,7 @@ export class DatabaseStorage implements IStorage {
   async updateUserStripeCustomerId(id: string, customerId: string): Promise<User> {
     const [user] = await db
       .update(users)
-      .set({ stripeCustomerId: customerId })
+      .set({ stripeCustomerId: customerId, updatedAt: new Date() })
       .where(eq(users.id, id))
       .returning();
     return user;
@@ -106,7 +106,7 @@ export class DatabaseStorage implements IStorage {
   async updateUserLastEmailCheck(id: string, lastCheck: Date): Promise<User> {
     const [user] = await db
       .update(users)
-      .set({ lastEmailCheck: lastCheck })
+      .set({ lastEmailCheck: lastCheck, updatedAt: new Date() })
       .where(eq(users.id, id))
       .returning();
     return user;
@@ -115,7 +115,7 @@ export class DatabaseStorage implements IStorage {
   async updateUserEmailCheckInterval(id: string, intervalMinutes: number): Promise<User> {
     const [user] = await db
       .update(users)
-      .set({ emailCheckInterval: intervalMinutes.toString() })
+      .set({ emailCheckInterval: intervalMinutes.toString(), updatedAt: new Date() })
       .where(eq(users.id, id))
       .returning();
     return user;
@@ -124,7 +124,7 @@ export class DatabaseStorage implements IStorage {
   async updateUserCharityName(id: string, charityName: string): Promise<User> {
     const [user] = await db
       .update(users)
-      .set({ charityName })
+      .set({ charityName, updatedAt: new Date() })
       .where(eq(users.id, id))
       .returning();
     return user;
@@ -157,7 +157,7 @@ export class DatabaseStorage implements IStorage {
   async updateContact(id: string, updates: Partial<InsertContact>): Promise<Contact> {
     const [updatedContact] = await db
       .update(contacts)
-      .set(updates)
+      .set({ ...updates, updatedAt: new Date() })
       .where(eq(contacts.id, id))
       .returning();
     return updatedContact;
@@ -191,7 +191,7 @@ export class DatabaseStorage implements IStorage {
   async updatePendingEmailStatus(id: string, status: string): Promise<PendingEmail> {
     const [updatedEmail] = await db
       .update(pendingEmails)
-      .set({ status })
+      .set({ status, updatedAt: new Date() })
       .where(eq(pendingEmails.id, id))
       .returning();
     return updatedEmail;
@@ -200,7 +200,7 @@ export class DatabaseStorage implements IStorage {
   async updatePendingEmailDonationLink(id: string, donationLinkId: string): Promise<PendingEmail> {
     const [updatedEmail] = await db
       .update(pendingEmails)
-      .set({ donationLinkId, status: "donation_sent" })
+      .set({ donationLinkId, status: "donation_sent", updatedAt: new Date() })
       .where(eq(pendingEmails.id, id))
       .returning();
     return updatedEmail;
@@ -265,7 +265,7 @@ export class DatabaseStorage implements IStorage {
     if (existing) {
       const [updated] = await db
         .update(emailStats)
-        .set(stats)
+        .set({ ...stats, updatedAt: new Date() })
         .where(and(eq(emailStats.userId, userId), eq(emailStats.date, date)))
         .returning();
       return updated;

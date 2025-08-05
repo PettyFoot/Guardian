@@ -29,24 +29,26 @@ The system uses React for the frontend with shadcn/ui components, Express.js for
 The application is fully functional and ready for deployment once API credentials are provided.
 
 ## Recent Changes (January 5, 2025)
+- **Database Overhaul & Cleanup:**
+  - **MAJOR**: Deleted all pending_emails data to start fresh
+  - **MAJOR**: Added timestamps (`created_at`, `updated_at`) to all database tables
+  - Updated all storage methods to automatically set `updatedAt` on record updates
+  - Enhanced schema with comprehensive timestamp tracking for audit trails
+  - All new database entries now include proper creation and modification timestamps
+
+- **Email Status & Payment Flow Fixes:**
+  - Fixed email status tracking: paid emails now correctly show as "paid" instead of "released" 
+  - Resolved "Paid" filter functionality to properly display paid emails
+  - Fixed donations page authentication to show actual donation data ($3.00 from 3 donations)
+  - Enhanced webhook system to properly mark emails as "paid" upon payment completion
+  - Created utility endpoint to retroactively update email statuses for whitelisted contacts
+
 - **Dynamic Payment Link System:**
   - Implemented dynamic Stripe payment links with custom charity names
   - Added payment_intentions table to track sender-to-recipient payment mapping
   - Enhanced webhook handling for dynamic payments with automatic sender whitelisting
   - Created payment success page with detailed confirmation messaging
   - Integrated charity name customization in user settings
-
-- **Database Schema Updates:**
-  - Added charityName field to users table with default "Email Guardian"
-  - Created payment_intentions table for tracking dynamic payment links
-  - Enhanced storage interface with payment intention management methods
-  - Added API endpoints for charity name updates and payment intention tracking
-
-- **Email Processing Enhancements:**
-  - Updated email processor to use dynamic payment links with user's charity name
-  - Enhanced auto-reply template to include personalized charity names
-  - Improved fallback system for payment link generation
-  - Added automatic sender whitelisting upon successful payment completion
 
 - **Previous Updates (January 4, 2025):**
   - Email Processing: Configurable check intervals (30 seconds to 1 hour)

@@ -14,6 +14,7 @@ export const users = pgTable("users", {
   lastEmailCheck: timestamp("last_email_check"),
   charityName: text("charity_name").default("Email Guardian"),
   createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
 });
 
 export const contacts = pgTable("contacts", {
@@ -23,6 +24,8 @@ export const contacts = pgTable("contacts", {
   name: text("name"),
   isWhitelisted: boolean("is_whitelisted").default(true),
   addedAt: timestamp("added_at").defaultNow(),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
 });
 
 export const pendingEmails = pgTable("pending_emails", {
@@ -36,6 +39,8 @@ export const pendingEmails = pgTable("pending_emails", {
   status: text("status").notNull().default("pending"), // pending, donation_sent, paid, released
   donationLinkId: text("donation_link_id"),
   stripeSessionId: text("stripe_session_id"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
 });
 
 export const donations = pgTable("donations", {
@@ -47,6 +52,8 @@ export const donations = pgTable("donations", {
   senderEmail: text("sender_email").notNull(),
   status: text("status").notNull().default("completed"), // completed, refunded
   paidAt: timestamp("paid_at").defaultNow(),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
 });
 
 export const emailStats = pgTable("email_stats", {
@@ -56,6 +63,8 @@ export const emailStats = pgTable("email_stats", {
   emailsFiltered: decimal("emails_filtered", { precision: 10, scale: 0 }).default("0"),
   donationsReceived: decimal("donations_received", { precision: 10, scale: 2 }).default("0.00"),
   pendingDonations: decimal("pending_donations", { precision: 10, scale: 0 }).default("0"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
 });
 
 export const paymentIntentions = pgTable("payment_intentions", {
@@ -69,6 +78,7 @@ export const paymentIntentions = pgTable("payment_intentions", {
   status: text("status").notNull().default("pending"), // pending, paid, cancelled
   metadata: json("metadata"), // Additional data like message context
   createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
   paidAt: timestamp("paid_at"),
 });
 
@@ -125,29 +135,39 @@ export const paymentIntentionsRelations = relations(paymentIntentions, ({ one })
 export const insertUserSchema = createInsertSchema(users).omit({
   id: true,
   createdAt: true,
+  updatedAt: true,
 });
 
 export const insertContactSchema = createInsertSchema(contacts).omit({
   id: true,
   addedAt: true,
+  createdAt: true,
+  updatedAt: true,
 });
 
 export const insertPendingEmailSchema = createInsertSchema(pendingEmails).omit({
   id: true,
+  createdAt: true,
+  updatedAt: true,
 });
 
 export const insertDonationSchema = createInsertSchema(donations).omit({
   id: true,
   paidAt: true,
+  createdAt: true,
+  updatedAt: true,
 });
 
 export const insertEmailStatsSchema = createInsertSchema(emailStats).omit({
   id: true,
+  createdAt: true,
+  updatedAt: true,
 });
 
 export const insertPaymentIntentionSchema = createInsertSchema(paymentIntentions).omit({
   id: true,
   createdAt: true,
+  updatedAt: true,
   paidAt: true,
 });
 
