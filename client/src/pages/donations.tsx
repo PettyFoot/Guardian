@@ -4,17 +4,20 @@ import { DonationItem } from "@/components/ui/donation-item";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { apiRequest } from "@/lib/queryClient";
+import { useAuth } from "@/hooks/use-auth";
 import { DollarSign } from "lucide-react";
 
-const CURRENT_USER_ID = "user-123";
-
 export default function Donations() {
+  const { user } = useAuth();
+  
   const { data: donations, isLoading } = useQuery({
-    queryKey: ["/api/donations"],
+    queryKey: ["/api/donations", user?.id],
     queryFn: async () => {
-      const res = await apiRequest("GET", `/api/donations?userId=${CURRENT_USER_ID}`);
+      if (!user?.id) return [];
+      const res = await apiRequest("GET", `/api/donations?userId=${user.id}`);
       return res.json();
-    }
+    },
+    enabled: !!user?.id
   });
 
   const totalAmount = donations?.reduce((sum: number, donation: any) => 

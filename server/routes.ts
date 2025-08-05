@@ -624,7 +624,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { EmailProcessor } = await import('./services/email-processor');
       const emailProcessor = new EmailProcessor();
       
-      // Process any pending emails from this sender
+      // Process any pending emails from this sender (this will mark them as "paid")
       await emailProcessor.processDonationComplete(senderEmail, userId);
       
       // Update email stats to reflect successful payment
@@ -642,6 +642,48 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.error('Error handling dynamic payment success:', error.message);
     }
   }
+
+  // Utility endpoint to update pending email statuses for paid contacts
+  app.post("/api/update-paid-statuses", async (req, res) => {
+    try {
+      const { userId } = req.body;
+      
+      if (!userId) {
+        return res.status(400).json({ message: "User ID is required" });
+      }
+
+      // Get all contacts that are whitelisted
+      const contacts = await storage.getContacts(userId);
+      const whitelistedContacts = contacts.filter(contact => contact.isWhitelisted);
+      
+      // Get all pending emails
+      const pendingEmails = await storage.getPendingEmails(userId);
+      
+      let updatedCount = 0;
+      
+      // Update status to "paid" for all emails from whitelisted contacts
+      for (const contact of whitelistedContacts) {
+        const contactEmails = pendingEmails.filter(email => 
+          email.sender === contact.email && email.status !== 'paid'
+        );
+        
+        for (const email of contactEmails) {
+          await storage.updatePendingEmailStatus(email.id, "paid");
+          updatedCount++;
+          console.log(`Updated email ${email.id} from ${contact.email} to paid status`);
+        }
+      }
+
+      res.json({ 
+        message: `Updated ${updatedCount} emails to paid status`,
+        updatedCount,
+        whitelistedContacts: whitelistedContacts.length
+      });
+    } catch (error: any) {
+      console.error('Error updating paid statuses:', error);
+      res.status(500).json({ message: "Error updating statuses: " + error.message });
+    }
+  });
 
   // Cleanup endpoint for removing duplicate auto-reply emails
   app.post("/api/cleanup-duplicate-emails", async (req, res) => {

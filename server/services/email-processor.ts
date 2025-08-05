@@ -259,7 +259,7 @@ Email Guardian System
       }
 
       // Update pending email status
-      await storage.updatePendingEmailStatus(pendingEmail.id, 'released');
+      await storage.updatePendingEmailStatus(pendingEmail.id, 'paid');
     }
 
     // Update stats
