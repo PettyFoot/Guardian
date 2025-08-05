@@ -7,12 +7,7 @@ export class EmailProcessor {
   private aiService: AIService;
 
   constructor() {
-    try {
-      this.aiService = new AIService();
-    } catch (error) {
-      console.warn('AI service not available:', error);
-      this.aiService = null as any;
-    }
+    this.aiService = new AIService();
   }
 
   async processNewEmails(user: User): Promise<void> {
@@ -87,36 +82,41 @@ export class EmailProcessor {
       return;
     }
 
-    // Check if sender is a known contact (whitelisted)
-    const existingContact = await storage.getContactByEmail(user.id, senderEmail);
-    if (existingContact && existingContact.isWhitelisted) {
+    // Skip emails with mailer-daemon or no-reply addresses
+    if (senderEmail.includes('mailer-daemon') || 
+        senderEmail.includes('no-reply') || 
+        senderEmail.includes('noreply') ||
+        senderEmail.includes('daemon@')) {
+      console.log(`Skipping system/automated email from: ${senderEmail}`);
+      return;
+    }
+
+    // Check if sender is whitelisted
+    const isWhitelisted = await storage.isEmailWhitelisted(user.id, senderEmail);
+    
+    if (isWhitelisted) {
       console.log(`Email from ${senderEmail} is whitelisted, keeping in inbox`);
-      
-      // Add known contact label
-      const labels = await gmailService.getLabels(user.gmailToken!);
-      const knownContactsLabel = labels.find(l => l.name === 'Email Guardian/Known Contacts');
-      
-      if (knownContactsLabel?.id) {
-        await gmailService.addLabel(user.gmailToken!, messageId, knownContactsLabel.id);
-      }
-      
+      // Email is from known contact, ensure it's in inbox
+      await gmailService.moveToInbox(user.gmailToken!, messageId);
       return;
     }
 
-    // Check if we already have a pending email entry for this message
-    const existingPendingEmail = await storage.getPendingEmailByGmailId(messageId);
+    // Check if we've already processed this email
+    const existingPendingEmail = await storage.getPendingEmailByGmailId(user.id, messageId);
     if (existingPendingEmail) {
-      console.log(`Email ${messageId} already processed as pending`);
-      return;
+      console.log(`Email from ${senderEmail} already processed`);
+      return; // Already processed
     }
 
-    // Create pending email entry
+    console.log(`Filtering email from unknown sender: ${senderEmail}`);
+
+    // Create pending email record
     const pendingEmail = await storage.createPendingEmail({
       userId: user.id,
       gmailMessageId: messageId,
       sender: senderEmail,
-      subject: subject || '',
-      snippet: snippet,
+      subject,
+      snippet,
       receivedAt: new Date(parseInt(message.internalDate || '0')),
       status: 'pending'
     });
@@ -205,7 +205,7 @@ export class EmailProcessor {
     let body: string;
     
     // Use AI-generated response if enabled, otherwise use template
-    if (user.useAiResponses && this.aiService) {
+    if (user.useAiResponses) {
       try {
         console.log(`Generating AI response for email from ${senderEmail}`);
         body = await this.aiService.generateContextualAutoReply(
@@ -290,11 +290,20 @@ Email Guardian System
         await gmailService.removeLabel(user.gmailToken, pendingEmail.gmailMessageId, pendingLabel.id);
       }
 
-      // Update pending email status to "paid"
+      // Update pending email status
       await storage.updatePendingEmailStatus(pendingEmail.id, 'paid');
     }
 
-    console.log(`Processed donation completion for ${senderEmail}, moved ${senderPendingEmails.length} emails to inbox`);
+    // Update stats
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    const stats = await storage.getEmailStats(userId, today);
+    const currentDonations = stats ? parseFloat(stats.donationsReceived || "0") : 0;
+    
+    await storage.createOrUpdateEmailStats(userId, today, {
+      donationsReceived: (currentDonations + 1.00).toString()
+    });
   }
 }
 

@@ -13,6 +13,7 @@ export const users = pgTable("users", {
   emailCheckInterval: decimal("email_check_interval", { precision: 5, scale: 1 }).default("1.0"), // in minutes
   lastEmailCheck: timestamp("last_email_check"),
   charityName: text("charity_name").default("Email Guardian"),
+  useAiResponses: boolean("use_ai_responses").default(false),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });

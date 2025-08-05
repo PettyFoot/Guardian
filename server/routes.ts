@@ -145,6 +145,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.patch("/api/user/:id/ai-responses", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { useAiResponses } = req.body;
+
+      if (typeof useAiResponses !== 'boolean') {
+        return res.status(400).json({ message: 'useAiResponses must be a boolean' });
+      }
+
+      const user = await storage.updateUserAiResponseSetting(id, useAiResponses);
+      res.json({ message: "AI response setting updated", user });
+    } catch (error: any) {
+      res.status(500).json({ message: "Error updating AI response setting: " + error.message });
+    }
+  });
+
   // Gmail OAuth routes
   app.get("/api/auth/gmail", async (req, res) => {
     try {

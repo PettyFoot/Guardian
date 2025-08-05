@@ -130,6 +130,15 @@ export class DatabaseStorage implements IStorage {
     return user;
   }
 
+  async updateUserAiResponseSetting(id: string, useAiResponses: boolean): Promise<User> {
+    const [user] = await db
+      .update(users)
+      .set({ useAiResponses, updatedAt: new Date() })
+      .where(eq(users.id, id))
+      .returning();
+    return user;
+  }
+
   async deleteUser(id: string): Promise<void> {
     await db.delete(users).where(eq(users.id, id));
   }

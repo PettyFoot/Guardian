@@ -62,6 +62,7 @@ export default function Settings() {
   const [donationAmount, setDonationAmount] = useState("1.00");
   const [emailCheckInterval, setEmailCheckInterval] = useState("1.0");
   const [charityName, setCharityName] = useState("");
+  const [useAiResponses, setUseAiResponses] = useState(false);
   const [autoReplyTemplate, setAutoReplyTemplate] = useState(`Hello,
 
 Thank you for your email. To help manage my inbox and reduce spam, I use an email filtering system that requires a small $1 donation for unknown senders to ensure your message reaches me.
@@ -86,6 +87,9 @@ Email Guardian System`);
     }
     if ((user as any)?.charityName) {
       setCharityName((user as any).charityName);
+    }
+    if ((user as any)?.useAiResponses !== undefined) {
+      setUseAiResponses((user as any).useAiResponses);
     }
   }, [user]);
 
@@ -152,6 +156,33 @@ Email Guardian System`);
       toast({
         title: "Error",
         description: error.message || "Failed to update charity name",
+        variant: "destructive",
+      });
+    }
+  });
+
+  const updateAiResponseMutation = useMutation({
+    mutationFn: async (useAi: boolean) => {
+      const res = await apiRequest("PATCH", `/api/user/${user?.id}/ai-responses`, { 
+        useAiResponses: useAi 
+      });
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.message || 'Failed to update AI response setting');
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      toast({
+        title: "AI Response Setting Updated",
+        description: "Your AI response preference has been updated successfully.",
+      });
+      queryClient.invalidateQueries({ queryKey: [`/api/user/${user?.id}`] });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to update AI response setting",
         variant: "destructive",
       });
     }
@@ -373,19 +404,62 @@ Email Guardian System`);
             </CardContent>
           </Card>
 
+          {/* AI Response Settings */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center space-x-2">
+                <Bell className="text-blue-600" size={20} />
+                <span>Email Response Configuration</span>
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <Label className="text-base font-medium">Use AI-Generated Responses</Label>
+                  <p className="text-sm text-gray-500">
+                    Generate contextual donation requests that reference the sender's original message. 
+                    If disabled, uses the template below.
+                  </p>
+                </div>
+                <Switch 
+                  checked={useAiResponses}
+                  onCheckedChange={(checked) => {
+                    setUseAiResponses(checked);
+                    updateAiResponseMutation.mutate(checked);
+                  }}
+                  disabled={updateAiResponseMutation.isPending}
+                  data-testid="switch-ai-responses"
+                />
+              </div>
+
+              {useAiResponses && (
+                <Alert>
+                  <AlertTriangle className="h-4 w-4" />
+                  <AlertDescription>
+                    AI responses analyze each email's content to create personalized donation requests while maintaining the core filtering purpose. 
+                    Requires OpenAI API key configuration.
+                  </AlertDescription>
+                </Alert>
+              )}
+            </CardContent>
+          </Card>
+
           {/* Auto-Reply Template */}
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center space-x-2">
                 <Bell className="text-purple-600" size={20} />
-                <span>Auto-Reply Template</span>
+                <span>Template Response {useAiResponses ? "(Fallback)" : "(Active)"}</span>
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               <div>
                 <Label htmlFor="autoReplyTemplate" className="text-base font-medium">Email Template</Label>
                 <p className="text-sm text-gray-500 mb-2">
-                  Message sent to unknown senders. Use {"{DONATION_LINK}"} as placeholder for the payment link.
+                  {useAiResponses 
+                    ? "Used as fallback when AI generation fails. Use {DONATION_LINK} as placeholder for the payment link."
+                    : "Message sent to unknown senders. Use {DONATION_LINK} as placeholder for the payment link."
+                  }
                 </p>
                 <Textarea
                   id="autoReplyTemplate"
@@ -393,6 +467,7 @@ Email Guardian System`);
                   onChange={(e) => setAutoReplyTemplate(e.target.value)}
                   rows={12}
                   className="font-mono text-sm"
+                  disabled={useAiResponses}
                 />
               </div>
             </CardContent>
