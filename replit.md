@@ -21,14 +21,26 @@ The system uses React for the frontend with shadcn/ui components, Express.js for
 - **NEW:** Historical email processing that checks emails since last check time
 - **NEW:** User settings for email processing frequency with API usage information
 
-⏳ **Pending Setup Requirements:**
+⏳ **Setup Requirements:**
 - Gmail OAuth credentials (GMAIL_CLIENT_ID, GMAIL_CLIENT_SECRET, GMAIL_REDIRECT_URI)
 - Stripe API keys for payment processing (STRIPE_SECRET_KEY, VITE_STRIPE_PUBLIC_KEY)
+- OpenAI API key for AI responses (OPENAI_API_KEY) - Currently experiencing quota limits
+
+⚠️ **Current Issue:**
+- OpenAI API quota exceeded - AI responses fall back to improved template until quota is restored
 
 🎯 **Ready for Use:** 
 The application is fully functional and ready for deployment once API credentials are provided.
 
 ## Recent Changes (January 5, 2025)
+- **AI-Powered Email Response System:**
+  - **NEW**: Added AI-generated contextual donation requests using OpenAI GPT-4o
+  - **NEW**: User toggle in settings to choose between AI responses and template responses
+  - **NEW**: AI analyzes incoming email content to create personalized, warm responses
+  - **NEW**: Enhanced prompting for genuine, conversational tone that acknowledges sender's specific business/request
+  - **NEW**: Improved fallback template for when AI is unavailable (quota limits, etc.)
+  - Added `useAiResponses` boolean field to users table with API endpoint for updates
+
 - **Database Overhaul & Cleanup:**
   - **MAJOR**: Deleted all pending_emails data to start fresh
   - **MAJOR**: Added timestamps (`created_at`, `updated_at`) to all database tables

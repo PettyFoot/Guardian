@@ -21,46 +21,50 @@ export class AIService {
     paymentLink: string
   ): Promise<string> {
     try {
-      const prompt = `You are helping to generate a professional auto-reply email for an email filtering service called "${charityName}". 
+      const prompt = `You are generating a personalized auto-reply for an email filtering charity system called "${charityName}".
 
-The email filtering service works by:
-1. Intercepting emails from unknown senders
-2. Requiring a small $1 donation to access the recipient's inbox
-3. This helps reduce spam and supports charity
+SENDER'S ORIGINAL MESSAGE:
+From: ${senderEmail}
+Subject: ${subject}
+Message: ${emailContent}
 
-INCOMING EMAIL DETAILS:
-- From: ${senderEmail}
-- To: ${recipientEmail}
-- Subject: ${subject}
-- Content snippet: ${emailContent}
+YOUR TASK: Create a warm, personalized response that:
+1. DIRECTLY acknowledges what they wrote about (their specific business/request/topic)
+2. Shows genuine interest in their message/business/proposal
+3. Explains the filtering system as a way to support charity while managing messages
+4. Makes the $1 donation feel meaningful for the cause
+5. Expresses anticipation to continue the conversation after donation
 
-TASK: Generate a professional, contextual auto-reply that:
-1. Acknowledges the specific content/purpose of their email
-2. Explains the email filtering donation system
-3. Provides the payment link
-4. Maintains a helpful, professional tone
-5. Is personalized to their message but stays focused on the donation request
+TONE: Friendly, appreciative, and charitable-minded. Make it feel like a real person responding who cares about both the sender's message AND the charitable cause.
 
-The response should be 2-3 paragraphs, acknowledge what they wrote about, and guide them to make the $1 donation to reach the recipient's inbox.
+STRUCTURE:
+- Paragraph 1: Acknowledge their specific message/business/request with genuine interest
+- Paragraph 2: Explain the filtering system in a positive, charity-focused way
+- Paragraph 3: Payment instructions and anticipation to continue discussion
+
+EXAMPLES OF GOOD RESPONSES:
+"Hi [Name], Thanks for reaching out about [specific topic]. [Relevant comment about their business/request]. This inbox uses a filtering system to manage incoming messages. We humbly request a small donation of $1 to ${charityName}. Small donations like yours go a long way to help people in need. Any donation automatically puts this email in our priority inbox. Look forward to [continuing discussion about their topic]. Thanks for your support."
+
+Make it sound natural and conversational, not corporate. The person should feel valued.
 
 Payment link: ${paymentLink}
 
-Generate only the email body text (no subject line):`;
+Generate only the email body (no subject):`;
 
       const response = await this.openai.chat.completions.create({
         model: "gpt-4o", // the newest OpenAI model is "gpt-4o" which was released May 13, 2024. do not change this unless explicitly requested by the user
         messages: [
           {
             role: "system",
-            content: "You are a professional email assistant that generates contextual auto-reply messages for an email filtering donation service. Keep responses professional, helpful, and focused on the donation request while acknowledging the sender's original message."
+            content: "You are an empathetic email assistant creating personalized charity donation requests. Your responses should feel genuine, warm, and human - never robotic or corporate. Always acknowledge the sender's specific message and show real interest in their business or request while seamlessly incorporating the donation appeal."
           },
           {
             role: "user",
             content: prompt
           }
         ],
-        max_tokens: 400,
-        temperature: 0.7,
+        max_tokens: 300,
+        temperature: 0.8,
       });
 
       return response.choices[0].message.content || this.getFallbackTemplate(senderEmail, charityName, paymentLink);
@@ -72,15 +76,15 @@ Generate only the email body text (no subject line):`;
   }
 
   private getFallbackTemplate(senderEmail: string, charityName: string, paymentLink: string): string {
-    return `Thank you for your email. This inbox uses an email filtering system to manage incoming messages.
+    return `Thank you for reaching out! This inbox uses a filtering system to manage incoming messages and support charitable causes.
 
-To ensure your message reaches the recipient's inbox, please make a small $1 donation to ${charityName}. This helps reduce spam and supports a good cause.
+To ensure your message reaches our priority inbox, we humbly request a small $1 donation to ${charityName}. These small donations make a big difference and help us support those in need.
 
-Please visit this link to complete your donation and ensure your email is delivered: ${paymentLink}
+Please complete your donation here: ${paymentLink}
 
-Once your donation is processed, your email will be released to the recipient's inbox immediately.
+Once processed, your email will be moved to our priority inbox and you'll be added to our trusted contacts for future messages. We look forward to connecting with you!
 
-Thank you for your understanding and support!`;
+Thank you for your support!`;
   }
 
   async analyzeEmailContent(subject: string, snippet: string): Promise<{
