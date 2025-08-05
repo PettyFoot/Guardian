@@ -587,6 +587,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
         await storage.updatePaymentIntentionStatus(intentions[0].id, 'paid', sessionId);
       }
       
+      // Create donation record for dashboard tracking
+      try {
+        await storage.createDonation({
+          userId,
+          amount: "1.00", // $1 donation
+          senderEmail,
+          status: "completed",
+          stripeSessionId: sessionId
+        });
+        console.log(`Created donation record for ${senderEmail} payment to ${targetEmail}`);
+      } catch (donationError: any) {
+        console.error(`Failed to create donation record: ${donationError.message}`);
+        // Continue with contact creation even if donation fails
+      }
+      
       // Automatically whitelist the sender
       const existingContact = await storage.getContactByEmail(userId, senderEmail);
       if (!existingContact) {
@@ -597,6 +612,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
           isWhitelisted: true
         });
         console.log(`Added ${senderEmail} to whitelist for ${targetEmail}`);
+      } else {
+        // Update existing contact to be whitelisted
+        if (!existingContact.isWhitelisted) {
+          await storage.updateContact(existingContact.id, { isWhitelisted: true });
+          console.log(`Updated ${senderEmail} to whitelisted status for ${targetEmail}`);
+        }
       }
       
       // Import EmailProcessor to process any pending emails
@@ -605,6 +626,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Process any pending emails from this sender
       await emailProcessor.processDonationComplete(senderEmail, userId);
+      
+      // Update email stats to reflect successful payment
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const stats = await storage.getEmailStats(userId, today);
+      const currentReceived = stats ? parseInt(stats.donationsReceived || "0") : 0;
+      
+      await storage.createOrUpdateEmailStats(userId, today, {
+        donationsReceived: (currentReceived + 1).toString()
+      });
       
       console.log(`Dynamic email access granted to ${senderEmail} for ${targetEmail}`);
     } catch (error: any) {

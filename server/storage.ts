@@ -27,6 +27,7 @@ export interface IStorage {
   getContacts(userId: string): Promise<Contact[]>;
   getContactByEmail(userId: string, email: string): Promise<Contact | undefined>;
   createContact(contact: InsertContact): Promise<Contact>;
+  updateContact(id: string, updates: Partial<InsertContact>): Promise<Contact>;
   deleteContact(id: string): Promise<void>;
   isEmailWhitelisted(userId: string, email: string): Promise<boolean>;
 
@@ -151,6 +152,15 @@ export class DatabaseStorage implements IStorage {
       .values(contact)
       .returning();
     return newContact;
+  }
+
+  async updateContact(id: string, updates: Partial<InsertContact>): Promise<Contact> {
+    const [updatedContact] = await db
+      .update(contacts)
+      .set(updates)
+      .where(eq(contacts.id, id))
+      .returning();
+    return updatedContact;
   }
 
   async deleteContact(id: string): Promise<void> {
