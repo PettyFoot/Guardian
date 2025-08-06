@@ -176,7 +176,7 @@ export class EmailProcessor {
         }
       }
     } catch (error: any) {
-      console.error('Error creating payment link:', error.message);
+      console.error('Error creating payment linkk:', error.message);
       // Fallback to manual donation request
       await this.sendDonationRequest(user, senderEmail, subject, snippet, 'Please contact us for payment instructions.');
     }

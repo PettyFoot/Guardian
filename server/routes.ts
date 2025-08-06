@@ -515,7 +515,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         paymentLinkId: paymentLink.id 
       });
     } catch (error: any) {
-      res.status(500).json({ message: "Error creating payment link: " + error.message });
+      res.status(500).json({ message: "Error creating payment linkkkkk: " + error.message });
     }
   });
 
@@ -579,7 +579,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         paymentLinkId: paymentLink.id 
       });
     } catch (error: any) {
-      console.error('Error creating dynamic payment link:', error);
+      console.error('Error creating dynamic payment linkkk:', error);
       res.status(500).json({ message: "Error creating payment link: " + error.message });
     }
   });
