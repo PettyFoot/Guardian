@@ -15,7 +15,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 // Read your SSL cert
-const caCert = fs.readFileSync(path.resolve(__dirname, "./global-bundle.pem"), "utf-8");
+const caCert = fs.readFileSync(path.resolve(__dirname, "../certs/global-bundle.pem"), "utf-8");
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
