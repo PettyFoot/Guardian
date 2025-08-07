@@ -7,16 +7,13 @@ import { emailProcessor } from "./services/email-processor";
 import { insertUserSchema, insertContactSchema } from "@shared/schema";
 import Stripe from "stripe";
 
-// Initialize Stripe (optional)
-let stripe: Stripe | null = null;
-if (process.env.STRIPE_SECRET_KEY) {
-  stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
-    apiVersion: "2025-07-30.basil",
-  });
-  console.log('Stripe initialized successfully');
-} else {
-  console.warn('Stripe secret key not found - payment features will be disabled');
+// Initialize Stripe
+if (!process.env.STRIPE_SECRET_KEY) {
+  throw new Error('Missing required Stripe secret: STRIPE_SECRET_KEY');
 }
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
+  apiVersion: "2025-07-30.basil",
+});
 
 // Auto-processing scheduler
 let processingInterval: NodeJS.Timeout | null = null;
@@ -480,10 +477,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Stripe payment endpoints
   app.post("/api/create-payment-intent", async (req, res) => {
     try {
-      if (!stripe) {
-        return res.status(503).json({ message: "Payment service not configured" });
-      }
-
       const { amount, senderEmail, pendingEmailId } = req.body;
       
       if (!amount || !senderEmail) {
@@ -508,10 +501,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/create-payment-link", async (req, res) => {
     try {
-      if (!stripe) {
-        return res.status(503).json({ message: "Payment service not configured" });
-      }
-
       const { amount, senderEmail, pendingEmailId, userId } = req.body;
       
       if (!amount || !senderEmail || !pendingEmailId || !userId) {
@@ -554,10 +543,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Create dynamic payment link for sender to access user's inbox
   app.post("/api/create-dynamic-payment-link", async (req, res) => {
     try {
-      if (!stripe) {
-        return res.status(503).json({ message: "Payment service not configured" });
-      }
-
       const { targetEmail, senderEmail, charityName, amount = 1.00 } = req.body;
       
       if (!targetEmail || !senderEmail) {
