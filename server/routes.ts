@@ -20,35 +20,56 @@ let processingInterval: NodeJS.Timeout | null = null;
 
 async function startAutoProcessing() {
   if (processingInterval) return; // Already running
-  
+
+  console.log(`[${new Date().toISOString()}] Starting auto-processing...`);
+
   processingInterval = setInterval(async () => {
+    console.log(`[${new Date().toISOString()}] Tick - Checking for users...`);
+    
     try {
-      console.log('Auto-processing emails...');
       const users = await storage.getAllUsers();
-      
+      console.log(`[${new Date().toISOString()}] Found ${users.length} users`);
+
       for (const user of users) {
-        if (user.gmailToken) {
-          // Check if it's time to process emails for this user
+        try {
+          if (!user.gmailToken) {
+            console.log(`[${user.id}] Skipping user (no Gmail token)`);
+            continue;
+          }
+
           const intervalMinutes = parseFloat(user.emailCheckInterval || "1.0");
           const lastCheckTime = user.lastEmailCheck ? new Date(user.lastEmailCheck) : new Date(0);
           const timeSinceLastCheck = Date.now() - lastCheckTime.getTime();
           const intervalMs = intervalMinutes * 60 * 1000;
-          
+
+          console.log(`[${user.id}] Last checked: ${lastCheckTime.toISOString()} | Interval: ${intervalMinutes} min | Time since: ${timeSinceLastCheck} ms`);
+
           if (timeSinceLastCheck >= intervalMs) {
+            console.log(`[${user.id}] Time to process emails`);
+
             const { EmailProcessor } = await import('./services/email-processor');
             const emailProcessor = new EmailProcessor();
+
+            console.log(`[${user.id}] Starting email processing`);
             await emailProcessor.processNewEmails(user);
-            
-            // Update last check time
+            console.log(`[${user.id}] Finished email processing`);
+
             await storage.updateUserLastEmailCheck(user.id, new Date());
+            console.log(`[${user.id}] Updated last email check time`);
+          } else {
+            console.log(`[${user.id}] Not enough time passed, skipping`);
           }
+        } catch (userError: any) {
+          console.error(`[${user.id}] Error processing user:`, userError?.stack || userError);
         }
       }
+
     } catch (error: any) {
-      console.error('Auto-processing error:', error.message);
+      console.error(`[GLOBAL] Auto-processing error:`, error?.stack || error);
     }
-  }, 30 * 1000); // Check every 30 seconds for more responsive scheduling
+  }, 30 * 1000); // Every 30 seconds
 }
+
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Start auto-processing when server starts
