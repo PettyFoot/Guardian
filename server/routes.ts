@@ -1020,7 +1020,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "Name, contact email, and contact name are required" });
       }
 
-      // Create charity in database
+      // Create charity in database first
       const charity = await storage.createCharity({
         name: name.trim(),
         description: description?.trim() || "",
@@ -1029,36 +1029,74 @@ export async function registerRoutes(app: Express): Promise<Server> {
         contactName: contactName.trim(),
       });
 
-      // Create Stripe Connect account
-      const account = await stripe.accounts.create({
-        type: 'standard',
-        country: 'US', // You might want to make this configurable
-        email: contactEmail.trim().toLowerCase(),
-        business_profile: {
-          name: name.trim(),
-          url: website?.trim() || undefined,
-        },
-        metadata: {
-          charity_id: charity.id,
-        },
-      });
+      try {
+        // Validate and format website URL
+        let websiteUrl;
+        if (website?.trim()) {
+          const trimmedWebsite = website.trim();
+          // Add https:// if no protocol is specified
+          if (!trimmedWebsite.startsWith('http://') && !trimmedWebsite.startsWith('https://')) {
+            websiteUrl = `https://${trimmedWebsite}`;
+          } else {
+            websiteUrl = trimmedWebsite;
+          }
+          
+          // Basic URL validation
+          try {
+            new URL(websiteUrl);
+          } catch {
+            websiteUrl = undefined; // Invalid URL, don't include it
+          }
+        }
 
-      // Update charity with Stripe account ID
-      await storage.updateCharityStripeAccount(charity.id, account.id);
+        // Create Stripe Connect account
+        const account = await stripe.accounts.create({
+          type: 'standard',
+          country: 'US', // You might want to make this configurable
+          email: contactEmail.trim().toLowerCase(),
+          business_profile: {
+            name: name.trim(),
+            url: websiteUrl, // Only include if it's a valid URL
+          },
+          metadata: {
+            charity_id: charity.id,
+          },
+        });
 
-      // Create account link for onboarding
-      const accountLink = await stripe.accountLinks.create({
-        account: account.id,
-        refresh_url: `${process.env.VITE_APP_URL || 'http://localhost:5000'}/charity-register`,
-        return_url: `${process.env.VITE_APP_URL || 'http://localhost:5000'}/charity-setup-complete?charity_id=${charity.id}`,
-        type: 'account_onboarding',
-      });
+        // Update charity with Stripe account ID
+        await storage.updateCharityStripeAccount(charity.id, account.id);
 
-      res.json({ 
-        charity,
-        stripeAccountId: account.id,
-        stripeAccountUrl: accountLink.url
-      });
+        // Create account link for onboarding
+        const accountLink = await stripe.accountLinks.create({
+          account: account.id,
+          refresh_url: `${process.env.VITE_APP_URL || 'http://localhost:5000'}/charity-register`,
+          return_url: `${process.env.VITE_APP_URL || 'http://localhost:5000'}/charity-setup-complete?charity_id=${charity.id}`,
+          type: 'account_onboarding',
+        });
+
+        res.json({ 
+          charity,
+          stripeAccountId: account.id,
+          stripeAccountUrl: accountLink.url
+        });
+
+      } catch (stripeError: any) {
+        console.error('Stripe Connect error:', stripeError);
+        
+        // If Stripe Connect fails, still return success but with different message
+        if (stripeError.message?.includes('signed up for Connect')) {
+          res.json({ 
+            charity,
+            stripeAccountId: null,
+            stripeAccountUrl: null,
+            warning: "Charity registered successfully, but Stripe Connect is not enabled on this account. Please enable Stripe Connect in your Stripe dashboard to process donations.",
+            stripeConnectSetupUrl: "https://stripe.com/docs/connect"
+          });
+        } else {
+          throw stripeError; // Re-throw other Stripe errors
+        }
+      }
+
     } catch (error: any) {
       console.error('Charity registration error:', error);
       res.status(500).json({ message: "Error registering charity: " + error.message });

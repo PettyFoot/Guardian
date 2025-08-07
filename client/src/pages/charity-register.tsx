@@ -29,10 +29,18 @@ export default function CharityRegister() {
       return res.json();
     },
     onSuccess: (data) => {
-      toast({
-        title: "Charity Registered Successfully!",
-        description: "Please complete your Stripe Connect setup to receive donations.",
-      });
+      if (data.warning) {
+        toast({
+          title: "Charity Registered with Warning",
+          description: data.warning,
+          variant: "destructive",
+        });
+      } else {
+        toast({
+          title: "Charity Registered Successfully!",
+          description: "Please complete your Stripe Connect setup to receive donations.",
+        });
+      }
       setIsRegistered(true);
       setStripeAccountUrl(data.stripeAccountUrl);
       setCharityId(data.charity.id);
@@ -100,13 +108,24 @@ export default function CharityRegister() {
             </div>
 
             <div className="flex flex-col sm:flex-row gap-3">
-              <Button 
-                onClick={() => window.open(stripeAccountUrl, '_blank')}
-                className="flex-1"
-              >
-                <ExternalLink className="mr-2 h-4 w-4" />
-                Complete Stripe Setup
-              </Button>
+              {stripeAccountUrl ? (
+                <Button 
+                  onClick={() => window.open(stripeAccountUrl, '_blank')}
+                  className="flex-1"
+                >
+                  <ExternalLink className="mr-2 h-4 w-4" />
+                  Complete Stripe Setup
+                </Button>
+              ) : (
+                <Button 
+                  onClick={() => window.open('https://stripe.com/docs/connect', '_blank')}
+                  className="flex-1"
+                  variant="outline"
+                >
+                  <ExternalLink className="mr-2 h-4 w-4" />
+                  Enable Stripe Connect
+                </Button>
+              )}
               <Button 
                 variant="outline" 
                 onClick={() => window.location.href = '/'}
