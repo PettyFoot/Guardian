@@ -40,6 +40,18 @@ The system uses React for the frontend with shadcn/ui components, Express.js for
 
 The application is fully functional and ready for use once remaining API credentials are provided.
 
+## Recent Updates (August 7, 2025)
+- **NO-REPLY EMAIL PROTECTION**: ✅ Added comprehensive no-reply email headers
+  - **NEW**: Donation request emails now include Reply-To: noreply@emailguardian.com
+  - **NEW**: Auto-Submitted and X-Auto-Response-Suppress headers prevent automatic replies
+  - **NEW**: X-No-Reply header signals email clients not to allow replies
+  
+- **AUTOMATIC REPLY DETECTION & HIDING**: ✅ Implemented smart reply handling
+  - **NEW**: Automatically detects replies to donation request emails
+  - **NEW**: Creates hidden "Auto-Reply Responses" label that doesn't appear in inbox
+  - **NEW**: Moves donation request replies to hidden label to keep inbox clean
+  - **NEW**: Enhanced subject line detection for various reply patterns
+
 ## Recent Changes (January 5, 2025)
 - **CRITICAL BUG FIX**: ✅ RESOLVED - Fixed duplicate email processing issue
   - **FIXED**: Email deduplication was failing due to missing userId parameter in getPendingEmailByGmailId call

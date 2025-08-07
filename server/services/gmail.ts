@@ -70,6 +70,11 @@ export class GmailService {
       },
       { 
         name: 'Email Guardian/Known Contacts'
+      },
+      {
+        name: 'Email Guardian/Auto-Reply Responses',
+        labelListVisibility: 'labelHide', // Hide from label list
+        messageListVisibility: 'hide'     // Hide from inbox view
       }
     ];
 
@@ -89,6 +94,28 @@ export class GmailService {
     }
 
     return createdLabels;
+  }
+
+  async createAutoReplyLabel(accessToken: string) {
+    const gmail = this.getGmailClient(accessToken);
+    
+    try {
+      const response = await gmail.users.labels.create({
+        userId: 'me',
+        requestBody: {
+          name: 'Email Guardian/Auto-Reply Responses',
+          labelListVisibility: 'labelHide', // Hide from label list
+          messageListVisibility: 'hide'     // Hide from inbox view
+        }
+      });
+      return response.data;
+    } catch (error: any) {
+      if (error.code === 409) { // Label already exists
+        const labels = await this.getLabels(accessToken);
+        return labels.find(l => l.name === 'Email Guardian/Auto-Reply Responses');
+      }
+      throw error;
+    }
   }
 
   async getLabels(accessToken: string) {
@@ -162,13 +189,27 @@ export class GmailService {
     });
   }
 
-  async sendEmail(accessToken: string, to: string, subject: string, body: string) {
+  async sendEmail(accessToken: string, to: string, subject: string, body: string, options?: { noReply?: boolean }) {
     const gmail = this.getGmailClient(accessToken);
     
-    const message = [
+    const headers = [
       `To: ${to}`,
       `Subject: ${subject}`,
-      'Content-Type: text/plain; charset=utf-8',
+      'Content-Type: text/plain; charset=utf-8'
+    ];
+
+    // Add no-reply headers if specified
+    if (options?.noReply) {
+      headers.push(
+        'Reply-To: noreply@emailguardian.com',
+        'Auto-Submitted: auto-generated',
+        'X-Auto-Response-Suppress: All',
+        'X-No-Reply: true'
+      );
+    }
+
+    const message = [
+      ...headers,
       '',
       body
     ].join('\n');

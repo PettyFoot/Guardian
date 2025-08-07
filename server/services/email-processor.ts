@@ -79,11 +79,12 @@ export class EmailProcessor {
       return;
     }
 
-    // Skip emails that are replies to auto-reply messages (containing "Email Access Request")
+    // Handle emails that are replies to donation request messages
     if (subject.includes('Email Access Request') || 
         subject.includes('Re: Re:') || 
         subject.match(/^Re:\s+.*\s+-\s+Email Access Request/)) {
-      console.log(`Skipping auto-reply or duplicate reply: ${subject}`);
+      console.log(`Detected reply to donation request: ${subject}, moving to hidden label`);
+      await this.handleDonationRequestReply(user, messageId, subject);
       return;
     }
 
@@ -229,31 +230,57 @@ export class EmailProcessor {
     if (user.useAiResponses && this.aiService) {
       try {
         console.log(`Generating AI response for email from ${senderEmail}`);
-        const signature = user.useCustomSignature ? user.customSignature : undefined;
         body = await this.aiService.generateContextualAutoReply(
           senderEmail,
           user.email,
           originalSubject,
           emailContent,
           charityName,
-          donationUrl,
-          signature
+          donationUrl
         );
       } catch (error) {
         console.error('Failed to generate AI response, falling back to template:', error);
-        const signature = user.useCustomSignature ? user.customSignature : undefined;
-        body = this.getTemplateResponse(charityName, donationUrl, signature);
+        body = this.getTemplateResponse(charityName, donationUrl);
       }
     } else {
-      const signature = user.useCustomSignature ? user.customSignature : undefined;
-      body = this.getTemplateResponse(charityName, donationUrl, signature);
+      body = this.getTemplateResponse(charityName, donationUrl);
     }
     
-    await gmailService.sendEmail(user.gmailToken!, senderEmail, subject, body);
+    await gmailService.sendEmail(user.gmailToken!, senderEmail, subject, body, { noReply: true });
   }
 
-  private getTemplateResponse(charityName: string, donationUrl: string, customSignature?: string): string {
-    const signature = customSignature || "Best regards,\nEmail Guardian System";
+  private async handleDonationRequestReply(user: User, messageId: string, subject: string) {
+    try {
+      // Get all labels to find the auto-reply responses label
+      const labels = await gmailService.getLabels(user.gmailToken!);
+      let autoReplyLabel = labels.find(l => l.name === 'Email Guardian/Auto-Reply Responses');
+      
+      // Create the label if it doesn't exist
+      if (!autoReplyLabel) {
+        console.log('Creating Auto-Reply Responses label...');
+        const response = await gmailService.createAutoReplyLabel(user.gmailToken!);
+        autoReplyLabel = response;
+      }
+      
+      if (autoReplyLabel?.id) {
+        // Add the auto-reply label to hide the message
+        await gmailService.addLabel(user.gmailToken!, messageId, autoReplyLabel.id);
+        
+        // Remove from inbox
+        const inboxLabel = labels.find(l => l.name === 'INBOX');
+        if (inboxLabel?.id) {
+          await gmailService.removeLabel(user.gmailToken!, messageId, inboxLabel.id);
+        }
+        
+        console.log(`Successfully moved donation request reply to hidden label: ${subject}`);
+      }
+    } catch (error) {
+      console.error('Error handling donation request reply:', error);
+    }
+  }
+
+  private getTemplateResponse(charityName: string, donationUrl: string): string {
+    const signature = "Best regards,\nEmail Guardian System";
     
     return `
 Hello,
