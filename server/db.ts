@@ -12,7 +12,7 @@ if (!process.env.DATABASE_URL) {
 
 // Get __dirname equivalent in ES Modules
 const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__fiame);
+const __dirname = path.dirname(__filename);
 
 // Read your SSL cert
 const caCert = fs.readFileSync(path.resolve(__dirname, "../certs/global-bundle.pem"), "utf-8");
