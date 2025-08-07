@@ -86,7 +86,7 @@ export class StripeService {
       throw new Error('Stripe is not configured. Please provide STRIPE_SECRET_KEY.');
     }
     
-    const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
+    const webhookSecret = press.env.STRIPE_WEBHOOK_SECRET;
     if (!webhookSecret) {
       throw new Error('Missing STRIPE_WEBHOOK_SECRET');
     }
