@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -22,6 +21,7 @@ export default function CharityRegister() {
   const [isRegistered, setIsRegistered] = useState(false);
   const [stripeAccountUrl, setStripeAccountUrl] = useState("");
   const [charityId, setCharityId] = useState("");
+  const [showStripeInfo, setShowStripeInfo] = useState(false); // State to control visibility of Stripe info
 
   const registerMutation = useMutation({
     mutationFn: async (data: typeof formData) => {
@@ -33,17 +33,35 @@ export default function CharityRegister() {
         toast({
           title: "Charity Registered with Warning",
           description: data.warning,
-          variant: "destructive",
+          variant: "default",
         });
-      } else {
+        setShowStripeInfo(true);
+
+        // If it's an HTTPS/live mode issue, show specific guidance
+        if (data.stripeTestKeysInfo) {
+          toast({
+            title: "Development Environment Detected",
+            description: data.stripeTestKeysInfo,
+            variant: "default",
+          });
+        }
+      } else if (data.stripeAccountUrl) {
         toast({
           title: "Charity Registered Successfully!",
           description: "Please complete your Stripe Connect setup to receive donations.",
         });
+        setIsRegistered(true);
+        setStripeAccountUrl(data.stripeAccountUrl);
+        setCharityId(data.charity.id);
+      } else {
+        // Handle cases where registration is successful but no Stripe URL is provided
+        toast({
+          title: "Charity Registered Successfully!",
+          description: "Your charity is now listed. Stripe setup may be handled separately.",
+        });
+        setIsRegistered(true); // Still mark as registered
+        setCharityId(data.charity.id); // Set charity ID if available
       }
-      setIsRegistered(true);
-      setStripeAccountUrl(data.stripeAccountUrl);
-      setCharityId(data.charity.id);
     },
     onError: (error: any) => {
       toast({
@@ -63,7 +81,7 @@ export default function CharityRegister() {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     // Basic validation
     if (!formData.name || !formData.contactEmail || !formData.contactName) {
       toast({
@@ -73,7 +91,7 @@ export default function CharityRegister() {
       });
       return;
     }
-    
+
     registerMutation.mutate(formData);
   };
 
@@ -97,19 +115,21 @@ export default function CharityRegister() {
                 This will allow us to securely transfer donations to your organization.
               </p>
             </div>
-            
-            <div className="bg-blue-50 p-4 rounded-lg">
-              <h3 className="font-medium text-blue-900 mb-2">Next Steps:</h3>
-              <ul className="text-sm text-blue-700 space-y-1">
-                <li>• Complete Stripe Connect account setup</li>
-                <li>• Verify your bank account details</li>
-                <li>• Start receiving donations from Email Guardian users</li>
-              </ul>
-            </div>
+
+            {showStripeInfo && stripeAccountUrl && ( // Conditionally render Stripe info
+              <div className="bg-blue-50 p-4 rounded-lg">
+                <h3 className="font-medium text-blue-900 mb-2">Next Steps:</h3>
+                <ul className="text-sm text-blue-700 space-y-1">
+                  <li>• Complete Stripe Connect account setup</li>
+                  <li>• Verify your bank account details</li>
+                  <li>• Start receiving donations from Email Guardian users</li>
+                </ul>
+              </div>
+            )}
 
             <div className="flex flex-col sm:flex-row gap-3">
               {stripeAccountUrl ? (
-                <Button 
+                <Button
                   onClick={() => window.open(stripeAccountUrl, '_blank')}
                   className="flex-1"
                 >
@@ -117,7 +137,7 @@ export default function CharityRegister() {
                   Complete Stripe Setup
                 </Button>
               ) : (
-                <Button 
+                <Button
                   onClick={() => window.open('https://stripe.com/docs/connect', '_blank')}
                   className="flex-1"
                   variant="outline"
@@ -126,8 +146,8 @@ export default function CharityRegister() {
                   Enable Stripe Connect
                 </Button>
               )}
-              <Button 
-                variant="outline" 
+              <Button
+                variant="outline"
                 onClick={() => window.location.href = '/'}
                 className="flex-1"
               >
@@ -176,7 +196,7 @@ export default function CharityRegister() {
                   required
                 />
               </div>
-              
+
               <div>
                 <Label htmlFor="website">Website</Label>
                 <Input
@@ -215,7 +235,7 @@ export default function CharityRegister() {
                   required
                 />
               </div>
-              
+
               <div>
                 <Label htmlFor="contactEmail">Contact Email *</Label>
                 <Input
@@ -240,9 +260,9 @@ export default function CharityRegister() {
               </ul>
             </div>
 
-            <Button 
-              type="submit" 
-              className="w-full" 
+            <Button
+              type="submit"
+              className="w-full"
               disabled={registerMutation.isPending}
             >
               {registerMutation.isPending ? 'Registering...' : 'Register Charity'}

@@ -1067,10 +1067,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         await storage.updateCharityStripeAccount(charity.id, account.id);
 
         // Create account link for onboarding
+        // Use HTTPS URLs for Stripe Connect in live mode
+        const baseUrl = process.env.VITE_APP_URL || (process.env.NODE_ENV === 'production' ? 'https://your-repl-url.replit.app' : 'http://localhost:5000');
         const accountLink = await stripe.accountLinks.create({
           account: account.id,
-          refresh_url: `${process.env.VITE_APP_URL || 'http://localhost:5000'}/charity-register`,
-          return_url: `${process.env.VITE_APP_URL || 'http://localhost:5000'}/charity-setup-complete?charity_id=${charity.id}`,
+          refresh_url: `${baseUrl}/charity-register`,
+          return_url: `${baseUrl}/charity-setup-complete?charity_id=${charity.id}`,
           type: 'account_onboarding',
         });
 
@@ -1083,7 +1085,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       } catch (stripeError: any) {
         console.error('Stripe Connect error:', stripeError);
         
-        // If Stripe Connect fails, still return success but with different message
+        // Handle specific Stripe errors
         if (stripeError.message?.includes('signed up for Connect')) {
           res.json({ 
             charity,
@@ -1091,6 +1093,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
             stripeAccountUrl: null,
             warning: "Charity registered successfully, but Stripe Connect is not enabled on this account. Please enable Stripe Connect in your Stripe dashboard to process donations.",
             stripeConnectSetupUrl: "https://stripe.com/docs/connect"
+          });
+        } else if (stripeError.message?.includes('Livemode requests must always be redirected via HTTPS')) {
+          res.json({ 
+            charity,
+            stripeAccountId: null,
+            stripeAccountUrl: null,
+            warning: "Charity registered successfully! However, Stripe Connect requires HTTPS for live mode. Please use test keys for development, or deploy to a live HTTPS environment to complete Stripe Connect setup.",
+            stripeTestKeysInfo: "Switch to test keys (sk_test_...) in your environment variables for development"
           });
         } else {
           throw stripeError; // Re-throw other Stripe errors
