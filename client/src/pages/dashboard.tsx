@@ -35,10 +35,9 @@ export default function Dashboard() {
   const [charityDialogOpen, setCharityDialogOpen] = useState(false);
   const [newContactEmail, setNewContactEmail] = useState("");
   const [selectedCharityId, setSelectedCharityId] = useState("");
-  const [intervalDialogOpen, setIntervalDialogOpen] = useState(false);
-  const [charityDialogOpen, setCharityDialogOpen] = useState(false);
   const [charitySelectDialogOpen, setCharitySelectDialogOpen] = useState(false);
-  const [newCharityName, setNewCharityName] = useState(user?.charityName || "Email Guardian");
+  const [newCharityName, setNewCharityName] = useState("Email Guardian");
+  const [newInterval, setNewInterval] = useState("5");
 
   // Manual sync mutation
   const manualSyncMutation = useMutation({
@@ -280,7 +279,7 @@ export default function Dashboard() {
                     : "No new contacts"
                 }
                 trendText="this week"
-                trendType={stats?.contactsAddedThisWeek > 0 ? "positive" : "neutral"}
+                trendType={stats?.contactsAddedThisWeek > 0 ? "positive" : "negative"}
               />
               <Dialog open={contactDialogOpen} onOpenChange={setContactDialogOpen}>
                 <DialogTrigger asChild>
@@ -437,7 +436,7 @@ export default function Dashboard() {
                       </div>
                       <div className="text-center">
                         <p className="font-medium text-gray-900">Auto-Sync</p>
-                        <p className="text-sm text-blue-600">Every {user?.emailCheckInterval || 1} min</p>
+                        <p className="text-sm text-blue-600">Every 5 min</p>
                       </div>
                     </Button>
                   </DialogTrigger>
@@ -489,7 +488,7 @@ export default function Dashboard() {
                       </div>
                       <div className="text-center">
                         <p className="font-medium text-gray-900">Charity</p>
-                        <p className="text-sm text-purple-600">{user?.charityName || 'Email Guardian'}</p>
+                        <p className="text-sm text-purple-600">Email Guardian</p>
                       </div>
                     </Button>
                   </DialogTrigger>
@@ -536,7 +535,7 @@ export default function Dashboard() {
                       </div>
                       <div className="text-center">
                         <p className="font-medium text-gray-900">Select Charity</p>
-                        <p className="text-sm text-green-600">{charities?.find(c => c.id === selectedCharityId)?.name || 'Choose a charity'}</p>
+                        <p className="text-sm text-green-600">{charities?.find((c: any) => c.id === selectedCharityId)?.name || 'Choose a charity'}</p>
                       </div>
                     </Button>
                   </DialogTrigger>
