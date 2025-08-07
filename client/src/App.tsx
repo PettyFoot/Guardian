@@ -16,10 +16,11 @@ import Checkout from "@/pages/checkout";
 import BusinessWebsite from "@/pages/business-website";
 import PaymentSuccess from "@/pages/payment-success";
 import NotFound from "@/pages/not-found";
+import CharityRegister from "@/pages/charity-register";
 
 function ProtectedRoute({ component: Component }: { component: React.ComponentType }) {
   const { isAuthenticated, isLoading } = useAuth();
-  
+
   if (isLoading) {
     return (
       <div className="h-screen flex items-center justify-center">
@@ -27,17 +28,17 @@ function ProtectedRoute({ component: Component }: { component: React.ComponentTy
       </div>
     );
   }
-  
+
   if (!isAuthenticated) {
     return <Redirect to="/setup" />;
   }
-  
+
   return <Component />;
 }
 
 function Router() {
   const { isAuthenticated, isLoading } = useAuth();
-  
+
   if (isLoading) {
     return (
       <div className="h-screen flex items-center justify-center">
@@ -54,6 +55,7 @@ function Router() {
       <Route path="/checkout" component={Checkout} />
       <Route path="/business" component={BusinessWebsite} />
       <Route path="/payment-success" component={PaymentSuccess} />
+      <Route path="/charity-register" component={CharityRegister} />
       <Route path="/">
         {isAuthenticated ? <Dashboard /> : <Redirect to="/setup" />}
       </Route>

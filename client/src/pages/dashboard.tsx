@@ -34,7 +34,10 @@ export default function Dashboard() {
   const [intervalDialogOpen, setIntervalDialogOpen] = useState(false);
   const [charityDialogOpen, setCharityDialogOpen] = useState(false);
   const [newContactEmail, setNewContactEmail] = useState("");
-  const [newInterval, setNewInterval] = useState(user?.emailCheckInterval || "1.0");
+  const [selectedCharityId, setSelectedCharityId] = useState("");
+  const [intervalDialogOpen, setIntervalDialogOpen] = useState(false);
+  const [charityDialogOpen, setCharityDialogOpen] = useState(false);
+  const [charitySelectDialogOpen, setCharitySelectDialogOpen] = useState(false);
   const [newCharityName, setNewCharityName] = useState(user?.charityName || "Email Guardian");
 
   // Manual sync mutation
@@ -172,10 +175,19 @@ export default function Dashboard() {
   const { data: stats, isLoading: statsLoading } = useQuery({
     queryKey: ["/api/dashboard/stats", user?.id],
     queryFn: async () => {
-      const res = await apiRequest("GET", `/api/dashboard/stats?userId=${user?.id}`);
+      if (!user?.id) return null;
+      const res = await apiRequest("GET", `/api/dashboard/stats?userId=${user.id}`);
       return res.json();
     },
     enabled: !!user?.id
+  });
+
+  const { data: charities } = useQuery({
+    queryKey: ["/api/charities"],
+    queryFn: async () => {
+      const res = await apiRequest("GET", "/api/charities");
+      return res.json();
+    }
   });
 
   const { data: pendingEmails, isLoading: emailsLoading } = useQuery({
@@ -216,7 +228,7 @@ export default function Dashboard() {
             </p>
           </div>
         </div>
-        
+
         <div className="p-4 sm:p-6 lg:p-8">
           {/* Stats Cards */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 mb-6 sm:mb-8">
@@ -236,7 +248,7 @@ export default function Dashboard() {
                 (stats?.emailsFiltered || 0) >= (stats?.emailsFilteredYesterday || 0) ? "positive" : "negative"
               }
             />
-            
+
             <StatsCard
               title="Pending Donations"
               value={stats?.pendingDonations || 0}
@@ -245,7 +257,7 @@ export default function Dashboard() {
               iconBg="bg-orange-50"
               subtext={`$${(stats?.pendingDonationsRevenue || 0).toFixed(2)} potential revenue`}
             />
-            
+
             <StatsCard
               title="Donations Received"
               value={`$${(stats?.donationsReceived || 0).toFixed(2)}`}
@@ -254,7 +266,7 @@ export default function Dashboard() {
               iconBg="bg-green-50"
               subtext={`${stats?.donationsCount || 0} successful donations this month`}
             />
-            
+
             <div className="relative">
               <StatsCard
                 title="Known Contacts"
@@ -338,7 +350,7 @@ export default function Dashboard() {
                     {pendingEmails?.slice(0, 3).map((email: any) => (
                       <EmailItem key={email.id} email={email} />
                     ))}
-                    
+
                     <Button variant="outline" className="w-full">
                       View All Pending Emails
                     </Button>
@@ -374,7 +386,7 @@ export default function Dashboard() {
                     {recentDonations?.map((donation: any) => (
                       <DonationItem key={donation.id} donation={donation} />
                     ))}
-                    
+
                     <div className="pt-4 border-t border-gray-200">
                       <div className="flex items-center justify-between text-sm">
                         <span className="text-gray-500">Total Today:</span>
@@ -506,6 +518,57 @@ export default function Dashboard() {
                         </Button>
                         <Button onClick={handleUpdateCharity} data-testid="button-save-charity">
                           Update Name
+                        </Button>
+                      </div>
+                    </div>
+                  </DialogContent>
+                </Dialog>
+
+                <Dialog open={charitySelectDialogOpen} onOpenChange={setCharitySelectDialogOpen}>
+                  <DialogTrigger asChild>
+                    <Button
+                      variant="outline"
+                      className="flex flex-col items-center space-y-3 p-6 h-auto"
+                      data-testid="button-select-charity"
+                    >
+                      <div className="w-12 h-12 bg-green-50 rounded-full flex items-center justify-center">
+                        <Heart className="text-green-600" size={24} />
+                      </div>
+                      <div className="text-center">
+                        <p className="font-medium text-gray-900">Select Charity</p>
+                        <p className="text-sm text-green-600">{charities?.find(c => c.id === selectedCharityId)?.name || 'Choose a charity'}</p>
+                      </div>
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent>
+                    <DialogHeader>
+                      <DialogTitle>Select Charity</DialogTitle>
+                      <DialogDescription>
+                        Choose a charity to receive donations.
+                      </DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-4">
+                      <div>
+                        <Label htmlFor="charity">Charity</Label>
+                        <Select value={selectedCharityId} onValueChange={setSelectedCharityId}>
+                          <SelectTrigger data-testid="select-charity">
+                            <SelectValue placeholder="Select a charity" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {charities?.map((charity: any) => (
+                              <SelectItem key={charity.id} value={charity.id}>
+                                {charity.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="flex justify-end space-x-2">
+                        <Button variant="outline" onClick={() => setCharitySelectDialogOpen(false)}>
+                          Cancel
+                        </Button>
+                        <Button onClick={() => { /* TODO: Implement mutation to save selected charity */ setCharitySelectDialogOpen(false) }} data-testid="button-save-charity-selection">
+                          Set Charity
                         </Button>
                       </div>
                     </div>

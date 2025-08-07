@@ -17,6 +17,127 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
 
 // Auto-processing scheduler
 let processingInterval: NodeJS.Timeout | null = null;
+let payoutInterval: NodeJS.Timeout | null = null;
+
+// Payout processing function
+async function processCharityPayouts() {
+  console.log(`[${new Date().toISOString()}] Starting charity payout processing...`);
+  
+  const results: any[] = [];
+  
+  try {
+    const charities = await storage.getCharitiesForPayout();
+    console.log(`Found ${charities.length} charities ready for payouts`);
+
+    for (const charity of charities) {
+      try {
+        // Check if it's time for payout based on frequency
+        const now = new Date();
+        const lastPayout = charity.lastPayoutDate ? new Date(charity.lastPayoutDate) : new Date(0);
+        
+        let shouldPayout = false;
+        switch (charity.payoutFrequency) {
+          case 'daily':
+            shouldPayout = now.getTime() - lastPayout.getTime() >= 24 * 60 * 60 * 1000;
+            break;
+          case 'weekly':
+            shouldPayout = now.getTime() - lastPayout.getTime() >= 7 * 24 * 60 * 60 * 1000;
+            break;
+          case 'monthly':
+            shouldPayout = now.getTime() - lastPayout.getTime() >= 30 * 24 * 60 * 60 * 1000;
+            break;
+        }
+
+        if (!shouldPayout) {
+          console.log(`[${charity.id}] Not time for payout yet`);
+          continue;
+        }
+
+        // Get donations ready for payout
+        const donations = await storage.getDonationsForPayout(charity.id);
+        
+        if (donations.length === 0) {
+          console.log(`[${charity.id}] No donations to pay out`);
+          continue;
+        }
+
+        const totalAmount = donations.reduce((sum, d) => sum + parseFloat(d.amount), 0);
+        
+        // Take platform fee (e.g., 2.9% + 30 cents, similar to Stripe)
+        const platformFeePercent = 0.029;
+        const platformFeeFixed = 0.30;
+        const platformFee = Math.max(totalAmount * platformFeePercent + platformFeeFixed, 0.30);
+        const payoutAmount = Math.max(totalAmount - platformFee, 0);
+
+        if (payoutAmount <= 0) {
+          console.log(`[${charity.id}] Payout amount too small after fees`);
+          continue;
+        }
+
+        console.log(`[${charity.id}] Processing payout: $${payoutAmount.toFixed(2)} (from $${totalAmount.toFixed(2)}, fee: $${platformFee.toFixed(2)})`);
+
+        // Create Stripe transfer
+        const transfer = await stripe.transfers.create({
+          amount: Math.round(payoutAmount * 100), // Convert to cents
+          currency: 'usd',
+          destination: charity.stripeConnectAccountId!,
+          metadata: {
+            charity_id: charity.id,
+            donation_count: donations.length.toString(),
+          },
+        });
+
+        // Update donation records
+        for (const donation of donations) {
+          await storage.updateDonationPayout(donation.id, transfer.id);
+        }
+
+        // Update charity payout record
+        await storage.updateCharityPayout(charity.id, payoutAmount.toFixed(2));
+
+        results.push({
+          charityId: charity.id,
+          charityName: charity.name,
+          donationCount: donations.length,
+          totalAmount: totalAmount.toFixed(2),
+          platformFee: platformFee.toFixed(2),
+          payoutAmount: payoutAmount.toFixed(2),
+          transferId: transfer.id,
+          success: true,
+        });
+
+        console.log(`[${charity.id}] Payout completed successfully`);
+
+      } catch (error: any) {
+        console.error(`[${charity.id}] Payout error:`, error.message);
+        results.push({
+          charityId: charity.id,
+          charityName: charity.name,
+          error: error.message,
+          success: false,
+        });
+      }
+    }
+
+  } catch (error: any) {
+    console.error('Global payout processing error:', error.message);
+  }
+
+  console.log(`[${new Date().toISOString()}] Payout processing completed`);
+  return results;
+}
+
+// Start automatic payout processing
+function startPayoutProcessing() {
+  if (payoutInterval) return; // Already running
+
+  console.log(`[${new Date().toISOString()}] Starting automatic payout processing...`);
+
+  // Run payout processing every 24 hours
+  payoutInterval = setInterval(async () => {
+    await processCharityPayouts();
+  }, 24 * 60 * 60 * 1000); // 24 hours
+}
 
 async function startAutoProcessing() {
   if (processingInterval) return; // Already running
@@ -74,6 +195,7 @@ async function startAutoProcessing() {
 export async function registerRoutes(app: Express): Promise<Server> {
   // Start auto-processing when server starts
   startAutoProcessing();
+  startPayoutProcessing();
   // User routes
   app.get("/api/users", async (req, res) => {
     try {
@@ -757,8 +879,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Create donation record for dashboard tracking
       try {
+        // Get user's selected charity
+        const user = await storage.getUser(userId);
         await storage.createDonation({
           userId,
+          charityId: user?.charityId || null,
           amount: "1.00", // $1 donation
           senderEmail,
           status: "completed",
@@ -883,6 +1008,149 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error: any) {
       console.error('Error updating paid statuses:', error);
       res.status(500).json({ message: "Error updating statuses: " + error.message });
+    }
+  });
+
+  // Charity registration routes
+  app.post("/api/charities/register", async (req, res) => {
+    try {
+      const { name, description, website, contactEmail, contactName } = req.body;
+      
+      if (!name || !contactEmail || !contactName) {
+        return res.status(400).json({ message: "Name, contact email, and contact name are required" });
+      }
+
+      // Create charity in database
+      const charity = await storage.createCharity({
+        name: name.trim(),
+        description: description?.trim() || "",
+        website: website?.trim() || "",
+        contactEmail: contactEmail.trim().toLowerCase(),
+        contactName: contactName.trim(),
+      });
+
+      // Create Stripe Connect account
+      const account = await stripe.accounts.create({
+        type: 'standard',
+        country: 'US', // You might want to make this configurable
+        email: contactEmail.trim().toLowerCase(),
+        business_profile: {
+          name: name.trim(),
+          url: website?.trim() || undefined,
+        },
+        metadata: {
+          charity_id: charity.id,
+        },
+      });
+
+      // Update charity with Stripe account ID
+      await storage.updateCharityStripeAccount(charity.id, account.id);
+
+      // Create account link for onboarding
+      const accountLink = await stripe.accountLinks.create({
+        account: account.id,
+        refresh_url: `${process.env.VITE_APP_URL || 'http://localhost:5000'}/charity-register`,
+        return_url: `${process.env.VITE_APP_URL || 'http://localhost:5000'}/charity-setup-complete?charity_id=${charity.id}`,
+        type: 'account_onboarding',
+      });
+
+      res.json({ 
+        charity,
+        stripeAccountId: account.id,
+        stripeAccountUrl: accountLink.url
+      });
+    } catch (error: any) {
+      console.error('Charity registration error:', error);
+      res.status(500).json({ message: "Error registering charity: " + error.message });
+    }
+  });
+
+  app.get("/api/charities", async (req, res) => {
+    try {
+      const charities = await storage.getAllCharities();
+      res.json(charities);
+    } catch (error: any) {
+      res.status(500).json({ message: "Error fetching charities: " + error.message });
+    }
+  });
+
+  app.post("/api/charities/:id/update-payout-frequency", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { frequency } = req.body;
+      
+      if (!['daily', 'weekly', 'monthly'].includes(frequency)) {
+        return res.status(400).json({ message: "Invalid payout frequency" });
+      }
+
+      const charity = await storage.updateCharityPayoutFrequency(id, frequency);
+      res.json({ message: "Payout frequency updated", charity });
+    } catch (error: any) {
+      res.status(500).json({ message: "Error updating payout frequency: " + error.message });
+    }
+  });
+
+  // Stripe Connect webhook for charity account updates
+  app.post("/api/webhooks/stripe-connect", async (req, res) => {
+    const sig = req.headers['stripe-signature'];
+    let event;
+
+    try {
+      event = req.body; // In production, verify the webhook signature
+    } catch (err: any) {
+      console.log('Connect webhook signature verification failed.', err.message);
+      return res.status(400).send(`Webhook Error: ${err.message}`);
+    }
+
+    console.log('Stripe Connect webhook received:', event.type);
+
+    switch (event.type) {
+      case 'account.updated':
+        const account = event.data.object;
+        if (account.charges_enabled && account.details_submitted) {
+          // Charity account is ready to receive payments
+          const charityId = account.metadata?.charity_id;
+          if (charityId) {
+            await storage.updateCharityStripeAccount(charityId, account.id, true);
+            console.log(`Charity ${charityId} Stripe account now ready for payments`);
+          }
+        }
+        break;
+      default:
+        console.log(`Unhandled Connect event type ${event.type}`);
+    }
+
+    res.json({ received: true });
+  });
+
+  // Manual payout processing endpoint (for admin use)
+  app.post("/api/admin/process-payouts", async (req, res) => {
+    try {
+      const results = await processCharityPayouts();
+      res.json({ 
+        message: "Payout processing completed",
+        results 
+      });
+    } catch (error: any) {
+      console.error('Payout processing error:', error);
+      res.status(500).json({ message: "Error processing payouts: " + error.message });
+    }
+  });
+
+  // User charity selection
+  app.patch("/api/user/:id/charity", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { charityId } = req.body;
+      
+      if (!charityId) {
+        return res.status(400).json({ message: "Charity ID is required" });
+      }
+      
+      const user = await storage.updateUserCharity(id, charityId);
+      res.json({ message: "Charity selection updated", user });
+    } catch (error: any) {
+      res.status(500).json({ message: "Error updating charity selection: " + error.message });
     }
   });
 

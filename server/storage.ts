@@ -1,11 +1,12 @@
-import { 
+import {
   users, contacts, pendingEmails, donations, emailStats, paymentIntentions,
   type User, type InsertUser,
   type Contact, type InsertContact,
   type PendingEmail, type InsertPendingEmail,
   type Donation, type InsertDonation,
   type EmailStats, type InsertEmailStats,
-  type PaymentIntention, type InsertPaymentIntention
+  type PaymentIntention, type InsertPaymentIntention,
+  charities, type InsertCharity
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, and, gte, lte, sql } from "drizzle-orm";
@@ -21,6 +22,8 @@ export interface IStorage {
   updateUserLastEmailCheck(id: string, lastCheck: Date): Promise<User>;
   updateUserEmailCheckInterval(id: string, intervalMinutes: number): Promise<User>;
   updateUserCharityName(id: string, charityName: string): Promise<User>;
+  updateUserCharity(userId: string, charityId: string): Promise<User>;
+  updateUserAiResponseSetting(id: string, useAiResponses: boolean): Promise<User>;
   deleteUser(id: string): Promise<void>;
 
   // Contact methods
@@ -44,15 +47,21 @@ export interface IStorage {
   getRecentDonations(userId: string, limit?: number): Promise<Donation[]>;
   createDonation(donation: InsertDonation): Promise<Donation>;
   getDonationByStripeSession(sessionId: string): Promise<Donation | undefined>;
+  getDonationsForPayout(charityId: string): Promise<Donation[]>;
+  updateDonationPayout(donationId: string, transferId: string): Promise<Donation>;
 
   // Stats methods
   getEmailStats(userId: string, date: Date): Promise<EmailStats | undefined>;
   createOrUpdateEmailStats(userId: string, date: Date, stats: Partial<EmailStats>): Promise<EmailStats>;
   getDashboardStats(userId: string): Promise<{
     emailsFiltered: number;
+    emailsFilteredYesterday: number;
     pendingDonations: number;
+    pendingDonationsRevenue: number;
     donationsReceived: number;
+    donationsCount: number;
     knownContacts: number;
+    contactsAddedThisWeek: number;
   }>;
 
   // Payment intention methods
@@ -60,6 +69,15 @@ export interface IStorage {
   getPaymentIntentionByStripeLink(linkId: string): Promise<PaymentIntention | undefined>;
   updatePaymentIntentionStatus(id: string, status: string, sessionId?: string): Promise<PaymentIntention>;
   getPaymentIntentionsBySender(senderEmail: string, targetEmail: string): Promise<PaymentIntention[]>;
+
+  // Charity methods
+  createCharity(data: InsertCharity): Promise<InsertCharity>;
+  getCharity(id: string): Promise<InsertCharity | undefined>;
+  getAllCharities(): Promise<InsertCharity[]>;
+  updateCharityStripeAccount(id: string, stripeAccountId: string, onboardingComplete?: boolean): Promise<InsertCharity>;
+  updateCharityPayoutFrequency(id: string, frequency: string): Promise<InsertCharity>;
+  getCharitiesForPayout(): Promise<InsertCharity[]>;
+  updateCharityPayout(id: string, amount: string): Promise<InsertCharity>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -137,6 +155,18 @@ export class DatabaseStorage implements IStorage {
       .where(eq(users.id, id))
       .returning();
     return user;
+  }
+
+  async updateUserCharity(userId: string, charityId: string): Promise<User> {
+    const [result] = await db
+      .update(users)
+      .set({
+        charityId,
+        updatedAt: new Date(),
+      })
+      .where(eq(users.id, userId))
+      .returning();
+    return result;
   }
 
   async deleteUser(id: string): Promise<void> {
@@ -244,12 +274,27 @@ export class DatabaseStorage implements IStorage {
       .limit(limit);
   }
 
-  async createDonation(donation: InsertDonation): Promise<Donation> {
-    const [newDonation] = await db
+  async createDonation(data: InsertDonation): Promise<Donation> {
+    const [result] = await db
       .insert(donations)
-      .values(donation)
+      .values({
+        ...data,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      })
       .returning();
-    return newDonation;
+
+    // Update charity total received
+    if (data.charityId && data.amount) {
+      await db.update(charities)
+        .set({
+          totalReceived: sql`${charities.totalReceived} + ${data.amount}`,
+          updatedAt: new Date(),
+        })
+        .where(eq(charities.id, data.charityId));
+    }
+
+    return result;
   }
 
   async getDonationByStripeSession(sessionId: string): Promise<Donation | undefined> {
@@ -258,6 +303,30 @@ export class DatabaseStorage implements IStorage {
       .from(donations)
       .where(eq(donations.stripeSessionId, sessionId));
     return donation || undefined;
+  }
+
+  async getDonationsForPayout(charityId: string): Promise<Donation[]> {
+    return await db.select()
+      .from(donations)
+      .where(
+        and(
+          eq(donations.charityId, charityId),
+          eq(donations.status, 'completed')
+        )
+      );
+  }
+
+  async updateDonationPayout(donationId: string, transferId: string): Promise<Donation> {
+    const [result] = await db.update(donations)
+      .set({
+        status: 'paid_out',
+        stripeTransferId: transferId,
+        paidOutAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .where(eq(donations.id, donationId))
+      .returning();
+    return result;
   }
 
   async getEmailStats(userId: string, date: Date): Promise<EmailStats | undefined> {
@@ -270,7 +339,7 @@ export class DatabaseStorage implements IStorage {
 
   async createOrUpdateEmailStats(userId: string, date: Date, stats: Partial<EmailStats>): Promise<EmailStats> {
     const existing = await this.getEmailStats(userId, date);
-    
+
     if (existing) {
       const [updated] = await db
         .update(emailStats)
@@ -300,18 +369,18 @@ export class DatabaseStorage implements IStorage {
     // Get today's stats
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    
+
     // Get yesterday's stats
     const yesterday = new Date(today);
     yesterday.setDate(yesterday.getDate() - 1);
-    
+
     // Get week start (7 days ago)
     const weekStart = new Date(today);
     weekStart.setDate(weekStart.getDate() - 7);
-    
+
     const todayStats = await this.getEmailStats(userId, today);
     const yesterdayStats = await this.getEmailStats(userId, yesterday);
-    
+
     // Get all pending emails (not just count)
     const pendingEmailsList = await db
       .select()
@@ -327,7 +396,7 @@ export class DatabaseStorage implements IStorage {
       .select()
       .from(contacts)
       .where(eq(contacts.userId, userId));
-      
+
     // Get contacts added this week
     const recentContacts = await db
       .select()
@@ -337,7 +406,7 @@ export class DatabaseStorage implements IStorage {
         sql`${contacts.createdAt} >= ${weekStart}`
       ));
 
-    const totalDonationAmount = totalDonations.reduce((sum, donation) => 
+    const totalDonationAmount = totalDonations.reduce((sum, donation) =>
       sum + parseFloat(donation.amount), 0);
 
     return {
@@ -353,10 +422,10 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Payment intention methods
-  async createPaymentIntention(intention: InsertPaymentIntention): Promise<PaymentIntention> {
+  async createPaymentIntention(data: InsertPaymentIntention): Promise<PaymentIntention> {
     const [created] = await db
       .insert(paymentIntentions)
-      .values(intention)
+      .values(data)
       .returning();
     return created;
   }
@@ -395,6 +464,76 @@ export class DatabaseStorage implements IStorage {
         eq(paymentIntentions.targetEmail, targetEmail)
       ))
       .orderBy(desc(paymentIntentions.createdAt));
+  }
+
+  // Charity methods
+  async createCharity(data: InsertCharity): Promise<InsertCharity> {
+    const [result] = await db.insert(charities).values({
+      ...data,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    }).returning();
+    return result;
+  }
+
+  async getCharity(id: string): Promise<InsertCharity | undefined> {
+    const [result] = await db.select()
+      .from(charities)
+      .where(eq(charities.id, id));
+    return result;
+  }
+
+  async getAllCharities(): Promise<InsertCharity[]> {
+    return await db.select()
+      .from(charities)
+      .where(eq(charities.isActive, true))
+      .orderBy(charities.name);
+  }
+
+  async updateCharityStripeAccount(id: string, stripeAccountId: string, onboardingComplete: boolean = false): Promise<InsertCharity> {
+    const [result] = await db.update(charities)
+      .set({
+        stripeConnectAccountId: stripeAccountId,
+        stripeOnboardingComplete: onboardingComplete,
+        updatedAt: new Date(),
+      })
+      .where(eq(charities.id, id))
+      .returning();
+    return result;
+  }
+
+  async updateCharityPayoutFrequency(id: string, frequency: string): Promise<InsertCharity> {
+    const [result] = await db.update(charities)
+      .set({
+        payoutFrequency: frequency,
+        updatedAt: new Date(),
+      })
+      .where(eq(charities.id, id))
+      .returning();
+    return result;
+  }
+
+  async getCharitiesForPayout(): Promise<InsertCharity[]> {
+    return await db.select()
+      .from(charities)
+      .where(
+        and(
+          eq(charities.isActive, true),
+          eq(charities.stripeOnboardingComplete, true)
+        )
+      );
+  }
+
+  async updateCharityPayout(id: string, amount: string): Promise<InsertCharity> {
+    const [result] = await db.update(charities)
+      .set({
+        totalPaidOut: sql`${charities.totalPaidOut} + ${amount}`,
+        lastPayoutDate: new Date(),
+        updatedAt: new Date(),
+      })
+      .where(eq(charities.id, id))
+      .returning();
+    return result;
   }
 }
 

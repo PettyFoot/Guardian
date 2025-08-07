@@ -13,6 +13,7 @@ export const users = pgTable("users", {
   emailCheckInterval: decimal("email_check_interval", { precision: 5, scale: 1 }).default("1.0"), // in minutes
   lastEmailCheck: timestamp("last_email_check"),
   charityName: text("charity_name").default("Email Guardian"),
+  charityId: varchar("charity_id").references(() => charities.id), // Reference to selected charity
   useAiResponses: boolean("use_ai_responses").default(false),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
@@ -47,12 +48,15 @@ export const pendingEmails = pgTable("pending_emails", {
 export const donations = pgTable("donations", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  charityId: varchar("charity_id").references(() => charities.id), // Which charity will receive this donation
   pendingEmailId: varchar("pending_email_id").references(() => pendingEmails.id, { onDelete: "cascade" }),
   stripeSessionId: text("stripe_session_id").notNull(),
+  stripeTransferId: text("stripe_transfer_id"), // For tracking payouts to charities
   amount: decimal("amount", { precision: 10, scale: 2 }).notNull(),
   senderEmail: text("sender_email").notNull(),
-  status: text("status").notNull().default("completed"), // completed, refunded
+  status: text("status").notNull().default("completed"), // completed, refunded, paid_out
   paidAt: timestamp("paid_at").defaultNow(),
+  paidOutAt: timestamp("paid_out_at"), // When donation was transferred to charity
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -64,6 +68,24 @@ export const emailStats = pgTable("email_stats", {
   emailsFiltered: decimal("emails_filtered", { precision: 10, scale: 0 }).default("0"),
   donationsReceived: decimal("donations_received", { precision: 10, scale: 2 }).default("0.00"),
   pendingDonations: decimal("pending_donations", { precision: 10, scale: 0 }).default("0"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const charities = pgTable("charities", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull(),
+  description: text("description"),
+  website: text("website"),
+  contactEmail: text("contact_email").notNull(),
+  contactName: text("contact_name").notNull(),
+  stripeConnectAccountId: text("stripe_connect_account_id"),
+  stripeOnboardingComplete: boolean("stripe_onboarding_complete").default(false),
+  isActive: boolean("is_active").default(true),
+  payoutFrequency: text("payout_frequency").default("weekly"), // daily, weekly, monthly
+  lastPayoutDate: timestamp("last_payout_date"),
+  totalReceived: decimal("total_received", { precision: 12, scale: 2 }).default("0.00"),
+  totalPaidOut: decimal("total_paid_out", { precision: 12, scale: 2 }).default("0.00"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -84,7 +106,16 @@ export const paymentIntentions = pgTable("payment_intentions", {
 });
 
 // Relations
-export const usersRelations = relations(users, ({ many }) => ({
+export const charitiesRelations = relations(charities, ({ many }) => ({
+  users: many(users),
+  donations: many(donations),
+}));
+
+export const usersRelations = relations(users, ({ one, many }) => ({
+  charity: one(charities, {
+    fields: [users.charityId],
+    references: [charities.id],
+  }),
   contacts: many(contacts),
   pendingEmails: many(pendingEmails),
   donations: many(donations),
@@ -111,6 +142,10 @@ export const donationsRelations = relations(donations, ({ one }) => ({
   user: one(users, {
     fields: [donations.userId],
     references: [users.id],
+  }),
+  charity: one(charities, {
+    fields: [donations.charityId],
+    references: [charities.id],
   }),
   pendingEmail: one(pendingEmails, {
     fields: [donations.pendingEmailId],
@@ -165,6 +200,12 @@ export const insertEmailStatsSchema = createInsertSchema(emailStats).omit({
   updatedAt: true,
 });
 
+export const insertCharitySchema = createInsertSchema(charities).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
 export const insertPaymentIntentionSchema = createInsertSchema(paymentIntentions).omit({
   id: true,
   createdAt: true,
@@ -187,6 +228,9 @@ export type InsertDonation = z.infer<typeof insertDonationSchema>;
 
 export type EmailStats = typeof emailStats.$inferSelect;
 export type InsertEmailStats = z.infer<typeof insertEmailStatsSchema>;
+
+export type Charity = typeof charities.$inferSelect;
+export type InsertCharity = z.infer<typeof insertCharitySchema>;
 
 export type PaymentIntention = typeof paymentIntentions.$inferSelect;
 export type InsertPaymentIntention = z.infer<typeof insertPaymentIntentionSchema>;
