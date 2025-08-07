@@ -3,13 +3,19 @@ import path from 'path';
 import { Pool } from 'pg';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import * as schema from '@shared/schema';
+import { fileURLToPath } from "url";
 
 if (!process.env.DATABASE_URL) {
   throw new Error('DATABASE_URL must be set');
 }
 
-// Load the AWS RDS root certificate
-const caCert = fs.readFileSync(path.resolve(__dirname, './global-bundle.pem')).toString();
+
+// Get __dirname equivalent in ES Modules
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// Read your SSL cert
+const caCert = fs.readFileSync(path.resolve(__dirname, "./global-bundle.pem"), "utf-8");
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
