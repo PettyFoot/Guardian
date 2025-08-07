@@ -17,7 +17,10 @@ export class GmailService {
     console.log('OAuth Redirect URI:', redirectUri);
 
     if (!clientId || !clientSecret) {
-      throw new Error('Gmail OAuth credentials not configured');
+      console.warn('Gmail OAuth credentials not configured - service will be limited');
+      // Initialize with empty credentials to prevent crashes
+      this.oauth2Client = new OAuth2Client('', '', redirectUri);
+      return;
     }
 
     this.oauth2Client = new OAuth2Client(
