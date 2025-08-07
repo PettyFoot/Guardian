@@ -87,6 +87,27 @@ export class EmailProcessor {
       return;
     }
 
+    // Skip bounce-back messages and delivery failure notifications
+    if (senderEmail.includes('mailer-daemon') || 
+        senderEmail.includes('postmaster') ||
+        senderEmail.includes('no-reply') || 
+        senderEmail.includes('noreply') ||
+        senderEmail.includes('daemon@') ||
+        senderEmail.includes('bounce') ||
+        senderEmail.toLowerCase().includes('delivery') ||
+        subject.toLowerCase().includes('delivery status notification') ||
+        subject.toLowerCase().includes('undelivered mail') ||
+        subject.toLowerCase().includes('address not found') ||
+        subject.toLowerCase().includes('message wasn') ||
+        subject.toLowerCase().includes('delivery failure') ||
+        subject.toLowerCase().includes('mail delivery failed') ||
+        snippet.toLowerCase().includes('address couldn\'t be found') ||
+        snippet.toLowerCase().includes('wasn\'t delivered') ||
+        snippet.toLowerCase().includes('delivery status notification')) {
+      console.log(`Skipping bounce-back/system email from: ${senderEmail}, subject: ${subject}`);
+      return;
+    }
+
     // Check if sender is a known contact (whitelisted)
     const existingContact = await storage.getContactByEmail(user.id, senderEmail);
     if (existingContact && existingContact.isWhitelisted) {
@@ -134,7 +155,7 @@ export class EmailProcessor {
 
     // Create dynamic Stripe payment link for the donation
     try {
-      const paymentResponse = await fetch(`http://${process.env.API_BASE_URL}/api/create-dynamic-payment-link`, {
+      const paymentResponse = await fetch('http://localhost:5000/api/create-dynamic-payment-link', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -156,7 +177,7 @@ export class EmailProcessor {
       } else {
         console.error('Failed to create dynamic payment link:', paymentData.message);
         // Fallback to regular payment link
-        const fallbackResponse = await fetch(`http://${process.env.API_BASE_URL}/api/create-dynamic-payment-link`, {
+        const fallbackResponse = await fetch('http://localhost:5000/api/create-payment-link', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -176,9 +197,7 @@ export class EmailProcessor {
         }
       }
     } catch (error: any) {
-      console.error('Error creating payment linkk:', error.message);
-      console.log('Attempting to fetch dynamic payment link from:', `${process.env.API_BASE_URL}/api/create-dynamic-payment-link`);
-
+      console.error('Error creating payment link:', error.message);
       // Fallback to manual donation request
       await this.sendDonationRequest(user, senderEmail, subject, snippet, 'Please contact us for payment instructions.');
     }
@@ -210,26 +229,32 @@ export class EmailProcessor {
     if (user.useAiResponses && this.aiService) {
       try {
         console.log(`Generating AI response for email from ${senderEmail}`);
+        const signature = user.useCustomSignature ? user.customSignature : undefined;
         body = await this.aiService.generateContextualAutoReply(
           senderEmail,
           user.email,
           originalSubject,
           emailContent,
           charityName,
-          donationUrl
+          donationUrl,
+          signature
         );
       } catch (error) {
         console.error('Failed to generate AI response, falling back to template:', error);
-        body = this.getTemplateResponse(charityName, donationUrl);
+        const signature = user.useCustomSignature ? user.customSignature : undefined;
+        body = this.getTemplateResponse(charityName, donationUrl, signature);
       }
     } else {
-      body = this.getTemplateResponse(charityName, donationUrl);
+      const signature = user.useCustomSignature ? user.customSignature : undefined;
+      body = this.getTemplateResponse(charityName, donationUrl, signature);
     }
     
     await gmailService.sendEmail(user.gmailToken!, senderEmail, subject, body);
   }
 
-  private getTemplateResponse(charityName: string, donationUrl: string): string {
+  private getTemplateResponse(charityName: string, donationUrl: string, customSignature?: string): string {
+    const signature = customSignature || "Best regards,\nEmail Guardian System";
+    
     return `
 Hello,
 
@@ -248,8 +273,7 @@ Once your payment is confirmed:
 
 This filtering system helps reduce spam while ensuring legitimate emails reach me. Thank you for understanding and for supporting ${charityName}!
 
-Best regards,
-Email Guardian System
+${signature}
     `.trim();
   }
 
