@@ -156,7 +156,12 @@ export class EmailProcessor {
 
     // Create dynamic Stripe payment link for the donation
     try {
-      const paymentResponse = await fetch(`https://${process.env.API_BASE_URL}/api/create-dynamic-payment-link`, {
+      // Use a more robust API URL construction with fallback
+      const apiUrl = process.env.API_BASE_URL 
+        ? (process.env.API_BASE_URL.startsWith('http') ? process.env.API_BASE_URL : `https://${process.env.API_BASE_URL}`)
+        : 'http://localhost:3001';
+        
+      const paymentResponse = await fetch(`${apiUrl}/api/create-dynamic-payment-link`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -178,7 +183,7 @@ export class EmailProcessor {
       } else {
         console.error('Failed to create dynamic payment link:', paymentData.message);
         // Fallback to regular payment link
-        const fallbackResponse = await fetch(`https://${process.env.API_BASE_URL}/api/create-payment-link`, {
+        const fallbackResponse = await fetch(`${apiUrl}/api/create-payment-link`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({

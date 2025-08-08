@@ -746,7 +746,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "User not found" });
       }
 
-      // Create Stripe payment link
+      // Create Stripe payment link using global stripe instance
       const paymentLink = await stripe.paymentLinks.create({
         line_items: [
           {
@@ -786,12 +786,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         metadata: { charityName: charityName || targetUser.charityName }
       });
 
+      console.log('Created dynamic payment link:', paymentLink.id);
+
       res.json({ 
         paymentLink: paymentLink.url,
         paymentLinkId: paymentLink.id 
       });
     } catch (error: any) {
-      console.error('Error creating dynamic payment linkkk:', error);
+      console.error('Error creating dynamic payment link:', error);
       res.status(500).json({ message: "Error creating payment link: " + error.message });
     }
   });
@@ -849,15 +851,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Import Stripe service for webhook verification
       const { stripeService } = await import('./services/stripe');
       
-      // Verify webhook signature
+      // Verify webhook signature using raw body buffer
       if (sig) {
-        const rawBody = JSON.stringify(req.body);
+        const rawBody = req.body; // This is now the raw buffer from express.raw()
         event = await stripeService.constructEvent(rawBody, sig);
         console.log('Webhook signature verified successfully');
       } else {
         // Fallback for testing without signature
         console.log('No webhook signature found, using raw body (testing mode)');
-        event = req.body;
+        event = JSON.parse(req.body.toString());
       }
     } catch (err: any) {
       console.log('Webhook signature verification failed.', err.message);
