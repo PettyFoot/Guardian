@@ -805,17 +805,63 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json({ received: true, debug: true });
   });
 
+  // Debug endpoint to test webhook processing
+  app.post("/api/webhooks/stripe-debug", async (req, res) => {
+    console.log('\n=== DEBUG WEBHOOK TEST ===');
+    console.log('Debug webhook body:', JSON.stringify(req.body, null, 2));
+    
+    // Simulate a payment_intent.succeeded event
+    const testEvent = {
+      type: 'payment_intent.succeeded',
+      id: 'evt_test_' + Date.now(),
+      data: {
+        object: {
+          id: 'pi_test_' + Date.now(),
+          metadata: {
+            type: 'inbox_access',
+            senderEmail: req.body.senderEmail || 'test@example.com',
+            targetEmail: req.body.targetEmail || 'target@example.com',
+            userId: req.body.userId || 'test-user-id'
+          }
+        }
+      }
+    };
+    
+    console.log('Simulating event:', JSON.stringify(testEvent, null, 2));
+    
+    // Process the test event
+    const paymentIntent = testEvent.data.object;
+    console.log('Processing test payment intent:', paymentIntent.id, paymentIntent.metadata);
+    
+    if (paymentIntent.metadata?.type === 'inbox_access') {
+      await handleDynamicPaymentSuccess(paymentIntent.metadata, paymentIntent.id);
+    }
+    
+    res.json({ received: true, debug: true });
+  });
+
   // Stripe webhooks for payment completion
   app.post("/api/webhooks/stripe", async (req, res) => {
     const sig = req.headers['stripe-signature'];
     let event;
 
     try {
-      // For testing, accept any webhook without verification
-      // In production, you should verify with your webhook secret
-      event = req.body;
+      // Import Stripe service for webhook verification
+      const { stripeService } = await import('./services/stripe');
+      
+      // Verify webhook signature
+      if (sig) {
+        const rawBody = JSON.stringify(req.body);
+        event = await stripeService.constructEvent(rawBody, sig);
+        console.log('Webhook signature verified successfully');
+      } else {
+        // Fallback for testing without signature
+        console.log('No webhook signature found, using raw body (testing mode)');
+        event = req.body;
+      }
     } catch (err: any) {
       console.log('Webhook signature verification failed.', err.message);
+      console.log('Webhook error details:', err);
       return res.status(400).send(`Webhook Error: ${err.message}`);
     }
 
@@ -830,6 +876,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       case 'payment_intent.succeeded':
         const paymentIntent = event.data.object;
         console.log('Payment Intent succeeded:', paymentIntent.id, paymentIntent.metadata);
+        console.log('Payment Intent full object:', JSON.stringify(paymentIntent, null, 2));
         if (paymentIntent.metadata?.type === 'email_access_donation') {
           await handlePaymentSuccess(paymentIntent.metadata);
         } else if (paymentIntent.metadata?.type === 'inbox_access') {
@@ -843,6 +890,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       case 'checkout.session.completed':
         const session = event.data.object;
         console.log('Checkout session completed:', session.id, session.metadata);
+        console.log('Checkout session full object:', JSON.stringify(session, null, 2));
         if (session.metadata?.type === 'email_access_donation') {
           await handlePaymentSuccess(session.metadata);
         } else if (session.metadata?.type === 'inbox_access') {
@@ -856,6 +904,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       case 'payment_link.payment_intent.succeeded':
         const linkPaymentIntent = event.data.object;
         console.log('Payment Link Payment Intent succeeded:', linkPaymentIntent.id, linkPaymentIntent.metadata);
+        console.log('Payment Link Payment Intent full object:', JSON.stringify(linkPaymentIntent, null, 2));
         if (linkPaymentIntent.metadata?.type === 'inbox_access') {
           await handleDynamicPaymentSuccess(linkPaymentIntent.metadata, linkPaymentIntent.id);
         } else {
@@ -896,6 +945,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   async function handleDynamicPaymentSuccess(metadata: any, sessionId: string, paymentLinkId?: string) {
     try {
+      console.log('\n=== HANDLING DYNAMIC PAYMENT SUCCESS ===');
+      console.log('Input parameters:', { metadata, sessionId, paymentLinkId });
+      
       let { senderEmail, targetEmail, userId } = metadata;
       
       // If metadata is missing, try to find the payment intention by payment link ID or session ID
@@ -939,28 +991,39 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       console.log(`Dynamic payment successful for ${senderEmail} to access ${targetEmail}`);
+      console.log(`Session ID being used: ${sessionId}`);
       
       // Update payment intention status
       const intentions = await storage.getPaymentIntentionsBySender(senderEmail, targetEmail);
+      console.log(`Found ${intentions.length} payment intentions for ${senderEmail} -> ${targetEmail}`);
+      
       if (intentions.length > 0) {
-        await storage.updatePaymentIntentionStatus(intentions[0].id, 'paid', sessionId);
+        console.log(`Updating payment intention ${intentions[0].id} with sessionId: ${sessionId}`);
+        const updatedIntention = await storage.updatePaymentIntentionStatus(intentions[0].id, 'paid', sessionId);
+        console.log(`Updated payment intention result:`, JSON.stringify(updatedIntention, null, 2));
       }
       
       // Create donation record for dashboard tracking
       try {
         // Get user's selected charity
         const user = await storage.getUser(userId);
-        await storage.createDonation({
+        console.log(`Creating donation record with sessionId: ${sessionId}`);
+        const donationData = {
           userId,
           charityId: user?.charityId || null,
           amount: "1.00", // $1 donation
           senderEmail,
           status: "completed",
           stripeSessionId: sessionId
-        });
+        };
+        console.log('Donation data being created:', JSON.stringify(donationData, null, 2));
+        
+        const createdDonation = await storage.createDonation(donationData);
+        console.log(`Created donation record:`, JSON.stringify(createdDonation, null, 2));
         console.log(`Created donation record for ${senderEmail} payment to ${targetEmail}`);
       } catch (donationError: any) {
         console.error(`Failed to create donation record: ${donationError.message}`);
+        console.error('Donation error stack:', donationError.stack);
         // Continue with contact creation even if donation fails
       }
       
@@ -999,9 +1062,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         donationsReceived: (currentReceived + 1).toString()
       });
       
-      console.log(`Dynamic email access granted to ${senderEmail} for ${targetEmail}`);
+      console.log('=== DYNAMIC PAYMENT SUCCESS HANDLING COMPLETE ===\n');
     } catch (error: any) {
-      console.error('Error handling dynamic payment success:', error.message);
+      console.error('Error in handleDynamicPaymentSuccess:', error.message);
+      console.error('Error stack:', error.stack);
     }
   }
 
@@ -1552,6 +1616,76 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error: any) {
       console.error('Cleanup error:', error);
       res.status(500).json({ message: "Error cleaning up emails: " + error.message });
+    }
+  });
+
+  // Debug endpoint to check database state
+  app.get("/api/debug/stripe-sessions", async (req, res) => {
+    try {
+      console.log('\n=== DEBUGGING STRIPE SESSIONS ===');
+      
+      // Get all donations with stripe_session_id
+      const allDonations = await storage.getAllDonations();
+      const donationsWithSession = allDonations.filter(d => d.stripeSessionId);
+      const donationsWithoutSession = allDonations.filter(d => !d.stripeSessionId);
+      
+      console.log(`Total donations: ${allDonations.length}`);
+      console.log(`Donations with stripe_session_id: ${donationsWithSession.length}`);
+      console.log(`Donations without stripe_session_id: ${donationsWithoutSession.length}`);
+      
+      if (donationsWithSession.length > 0) {
+        console.log('Sample donations with session ID:', donationsWithSession.slice(0, 3).map(d => ({
+          id: d.id,
+          stripeSessionId: d.stripeSessionId,
+          senderEmail: d.senderEmail,
+          createdAt: d.createdAt
+        })));
+      }
+      
+      // Get all payment intentions
+      const allUsers = await storage.getAllUsers();
+      let allIntentions = [];
+      for (const user of allUsers) {
+        const intentions = await storage.getPaymentIntentionsBySender('', user.email);
+        allIntentions = allIntentions.concat(intentions);
+      }
+      
+      const intentionsWithSession = allIntentions.filter(i => i.stripeSessionId);
+      const intentionsWithoutSession = allIntentions.filter(i => !i.stripeSessionId);
+      
+      console.log(`Total payment intentions: ${allIntentions.length}`);
+      console.log(`Intentions with stripe_session_id: ${intentionsWithSession.length}`);
+      console.log(`Intentions without stripe_session_id: ${intentionsWithoutSession.length}`);
+      
+      if (intentionsWithSession.length > 0) {
+        console.log('Sample intentions with session ID:', intentionsWithSession.slice(0, 3).map(i => ({
+          id: i.id,
+          stripeSessionId: i.stripeSessionId,
+          senderEmail: i.senderEmail,
+          targetEmail: i.targetEmail,
+          status: i.status,
+          createdAt: i.createdAt
+        })));
+      }
+      
+      res.json({
+        donations: {
+          total: allDonations.length,
+          withSessionId: donationsWithSession.length,
+          withoutSessionId: donationsWithoutSession.length,
+          sample: donationsWithSession.slice(0, 3)
+        },
+        paymentIntentions: {
+          total: allIntentions.length,
+          withSessionId: intentionsWithSession.length,
+          withoutSessionId: intentionsWithoutSession.length,
+          sample: intentionsWithSession.slice(0, 3)
+        }
+      });
+      
+    } catch (error) {
+      console.error('Debug endpoint error:', error);
+      res.status(500).json({ error: error.message });
     }
   });
 

@@ -51,6 +51,7 @@ export interface IStorage {
   getDonationByStripeSession(sessionId: string): Promise<Donation | undefined>;
   getDonationsForPayout(charityId: string): Promise<Donation[]>;
   updateDonationPayout(donationId: string, transferId: string): Promise<Donation>;
+  getAllDonations(): Promise<Donation[]>; // For debugging
 
   // Stats methods
   getEmailStats(userId: string, date: Date): Promise<EmailStats | undefined>;
@@ -307,6 +308,9 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createDonation(data: InsertDonation): Promise<Donation> {
+    console.log(`\n=== CREATING DONATION ===`);
+    console.log('Donation data:', JSON.stringify(data, null, 2));
+    
     const [result] = await db
       .insert(donations)
       .values({
@@ -315,6 +319,8 @@ export class DatabaseStorage implements IStorage {
         updatedAt: new Date(),
       })
       .returning();
+
+    console.log(`Created donation result:`, JSON.stringify(result, null, 2));
 
     // Update charity total received
     if (data.charityId && data.amount) {
@@ -326,6 +332,7 @@ export class DatabaseStorage implements IStorage {
         .where(eq(charities.id, data.charityId));
     }
 
+    console.log('=== DONATION CREATION COMPLETE ===\n');
     return result;
   }
 
@@ -359,6 +366,12 @@ export class DatabaseStorage implements IStorage {
       .where(eq(donations.id, donationId))
       .returning();
     return result;
+  }
+
+  async getAllDonations(): Promise<Donation[]> {
+    return await db.select()
+      .from(donations)
+      .orderBy(desc(donations.paidAt));
   }
 
   async getEmailStats(userId: string, date: Date): Promise<EmailStats | undefined> {
@@ -471,19 +484,29 @@ export class DatabaseStorage implements IStorage {
   }
 
   async updatePaymentIntentionStatus(id: string, status: string, sessionId?: string): Promise<PaymentIntention> {
+    console.log(`\n=== UPDATING PAYMENT INTENTION STATUS ===`);
+    console.log(`ID: ${id}, Status: ${status}, SessionId: ${sessionId}`);
+    
     const updateData: any = { status };
     if (sessionId) {
       updateData.stripeSessionId = sessionId;
+      console.log(`Adding stripeSessionId to update data: ${sessionId}`);
     }
     if (status === 'paid') {
       updateData.paidAt = new Date();
     }
+
+    console.log('Update data:', JSON.stringify(updateData, null, 2));
 
     const [updated] = await db
       .update(paymentIntentions)
       .set(updateData)
       .where(eq(paymentIntentions.id, id))
       .returning();
+    
+    console.log(`Updated payment intention result:`, JSON.stringify(updated, null, 2));
+    console.log('=== PAYMENT INTENTION STATUS UPDATE COMPLETE ===\n');
+    
     return updated;
   }
 
