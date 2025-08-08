@@ -311,29 +311,62 @@ export class DatabaseStorage implements IStorage {
     console.log(`\n=== CREATING DONATION ===`);
     console.log('Donation data:', JSON.stringify(data, null, 2));
     
-    const [result] = await db
-      .insert(donations)
-      .values({
-        ...data,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      })
-      .returning();
-
-    console.log(`Created donation result:`, JSON.stringify(result, null, 2));
-
-    // Update charity total received
-    if (data.charityId && data.amount) {
-      await db.update(charities)
-        .set({
-          totalReceived: sql`${charities.totalReceived} + ${data.amount}`,
+    try {
+      // Try to create donation with all fields
+      const [result] = await db
+        .insert(donations)
+        .values({
+          ...data,
+          createdAt: new Date(),
           updatedAt: new Date(),
         })
-        .where(eq(charities.id, data.charityId));
-    }
+        .returning();
 
-    console.log('=== DONATION CREATION COMPLETE ===\n');
-    return result;
+      console.log(`Created donation result:`, JSON.stringify(result, null, 2));
+
+      // Update charity total received
+      if (data.charityId && data.amount) {
+        await db.update(charities)
+          .set({
+            totalReceived: sql`${charities.totalReceived} + ${data.amount}`,
+            updatedAt: new Date(),
+          })
+          .where(eq(charities.id, data.charityId));
+      }
+
+      console.log('=== DONATION CREATION COMPLETE ===\n');
+      return result;
+    } catch (error: any) {
+      // If the error is about missing columns, try with minimal required fields
+      if (error.message && (error.message.includes('charity_id') || error.message.includes('stripe_transfer_id') || error.message.includes('paid_out_at'))) {
+        console.log('Missing columns detected, creating donation with minimal fields');
+        
+        // Extract only the fields that definitely exist in the database
+        const minimalData = {
+          userId: data.userId,
+          stripeSessionId: data.stripeSessionId,
+          amount: data.amount,
+          senderEmail: data.senderEmail,
+          status: data.status || 'completed',
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        };
+        
+        console.log('Minimal donation data:', JSON.stringify(minimalData, null, 2));
+        
+        const [result] = await db
+          .insert(donations)
+          .values(minimalData)
+          .returning();
+
+        console.log(`Created donation result (minimal fields):`, JSON.stringify(result, null, 2));
+        console.log('=== DONATION CREATION COMPLETE (MINIMAL FIELDS) ===\n');
+        return result;
+      }
+      
+      // Re-throw the error if it's not about missing columns
+      throw error;
+    }
   }
 
   async getDonationByStripeSession(sessionId: string): Promise<Donation | undefined> {
