@@ -390,6 +390,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Update charity selection
+  app.patch("/api/user/:id/charity-selection", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { charityData } = req.body;
+      
+      if (!charityData || !charityData.type) {
+        return res.status(400).json({ message: "Invalid charity data" });
+      }
+      
+      const user = await storage.updateUserCharitySelection(id, charityData);
+      res.json({ message: "Charity selection updated", user });
+    } catch (error: any) {
+      res.status(500).json({ message: "Error updating charity selection: " + error.message });
+    }
+  });
+
   // Manual sync endpoint  
   app.post("/api/manual-sync", async (req, res) => {
     try {

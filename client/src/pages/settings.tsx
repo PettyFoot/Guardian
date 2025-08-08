@@ -11,10 +11,10 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useLocation } from "wouter";
-import { Save, Mail, Shield, DollarSign, Bell, AlertTriangle, UserX, Clock, Trash2, CreditCard } from "lucide-react";
+import { Save, Mail, Shield, DollarSign, Bell, AlertTriangle, UserX, Clock, Trash2, CreditCard, Building2, Plus, CheckCircle } from "lucide-react";
 
 function CleanupButton({ userId }: { userId?: string }) {
   const { toast } = useToast();
@@ -63,6 +63,15 @@ export default function Settings() {
   const [emailCheckInterval, setEmailCheckInterval] = useState("1.0");
   const [charityName, setCharityName] = useState("");
   const [useAiResponses, setUseAiResponses] = useState(false);
+  const [selectedCharityId, setSelectedCharityId] = useState("");
+  const [useCustomCharity, setUseCustomCharity] = useState(false);
+  const [customCharity, setCustomCharity] = useState({
+    name: "",
+    contact: "",
+    address: "",
+    phone: "",
+    email: ""
+  });
   const [autoReplyTemplate, setAutoReplyTemplate] = useState(`Hello,
 
 Thank you for your email. To help manage my inbox and reduce spam, I use an email filtering system that requires a small $1 donation for unknown senders to ensure your message reaches me.
@@ -79,6 +88,18 @@ Best regards,
 Email Guardian System`);
 
   const { toast } = useToast();
+
+  // Fetch available charities
+  const { data: charities = [], isLoading: charitiesLoading } = useQuery({
+    queryKey: ['/api/charities'],
+    queryFn: async () => {
+      const response = await fetch('/api/charities');
+      if (!response.ok) {
+        throw new Error('Failed to fetch charities');
+      }
+      return response.json();
+    }
+  });
 
   // Load user's current settings
   useEffect(() => {
@@ -188,9 +209,71 @@ Email Guardian System`);
     }
   });
 
+  const updateCharitySelectionMutation = useMutation({
+    mutationFn: async (charityData: any) => {
+      const res = await apiRequest("PATCH", `/api/user/${user?.id}/charity-selection`, { 
+        charityData 
+      });
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.message || 'Failed to update charity selection');
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      toast({
+        title: "Charity Selection Updated",
+        description: "Your charity selection has been updated successfully.",
+      });
+      queryClient.invalidateQueries({ queryKey: [`/api/user/${user?.id}`] });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to update charity selection",
+        variant: "destructive",
+      });
+    }
+  });
+
   const handleCharityNameSave = () => {
     if (charityName.trim()) {
       updateCharityNameMutation.mutate(charityName.trim());
+    }
+  };
+
+  const handleCharitySelection = () => {
+    if (useCustomCharity) {
+      // Save custom charity
+      updateCharitySelectionMutation.mutate({
+        type: 'custom',
+        charity: customCharity
+      });
+    } else if (selectedCharityId) {
+      // Save selected charity
+      const selectedCharity = charities.find(c => c.id === selectedCharityId);
+      if (selectedCharity) {
+        updateCharitySelectionMutation.mutate({
+          type: 'selected',
+          charityId: selectedCharityId,
+          charity: selectedCharity
+        });
+      }
+    }
+  };
+
+  const handleCustomCharityToggle = (checked: boolean) => {
+    setUseCustomCharity(checked);
+    if (checked) {
+      setSelectedCharityId("");
+    } else {
+      setCustomCharity({
+        name: "",
+        contact: "",
+        address: "",
+        phone: "",
+        email: ""
+      });
     }
   };
 
@@ -400,6 +483,141 @@ Email Guardian System`);
                   </Button>
                 </div>
                 <p className="text-sm text-gray-400 mt-1">This appears in Stripe payment descriptions</p>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Charity Selection */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center space-x-2">
+                <Building2 className="text-blue-600" size={20} />
+                <span>Charity Selection</span>
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <Label className="text-base font-medium">Use Custom Charity</Label>
+                  <p className="text-sm text-gray-500">Toggle to add a custom charity instead of selecting from available ones</p>
+                </div>
+                <Switch 
+                  checked={useCustomCharity}
+                  onCheckedChange={handleCustomCharityToggle}
+                />
+              </div>
+
+              {!useCustomCharity ? (
+                <div className="space-y-4">
+                  <div>
+                    <Label className="text-base font-medium">Select Available Charity</Label>
+                    <p className="text-sm text-gray-500 mb-2">Choose from charities that have completed Stripe onboarding</p>
+                    <Select 
+                      value={selectedCharityId} 
+                      onValueChange={setSelectedCharityId}
+                      disabled={charitiesLoading}
+                    >
+                      <SelectTrigger className="max-w-md">
+                        <SelectValue placeholder={charitiesLoading ? "Loading charities..." : "Select a charity"} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {charities.map((charity: any) => (
+                          <SelectItem key={charity.id} value={charity.id}>
+                            <div className="flex items-center space-x-2">
+                              <span>{charity.name}</span>
+                              {charity.stripeOnboardingComplete && (
+                                <CheckCircle className="h-4 w-4 text-green-600" />
+                              )}
+                            </div>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    {charities.length === 0 && !charitiesLoading && (
+                      <p className="text-sm text-gray-500 mt-2">No charities available. Add a custom charity instead.</p>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  <div>
+                    <Label className="text-base font-medium">Custom Charity Details</Label>
+                    <p className="text-sm text-gray-500 mb-4">This charity will be contacted to join Stripe Connect for automated payments</p>
+                    
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <Label htmlFor="custom-charity-name">Charity Name *</Label>
+                        <Input
+                          id="custom-charity-name"
+                          value={customCharity.name}
+                          onChange={(e) => setCustomCharity(prev => ({ ...prev, name: e.target.value }))}
+                          placeholder="Enter charity name"
+                        />
+                      </div>
+                      <div>
+                        <Label htmlFor="custom-charity-contact">Contact Person</Label>
+                        <Input
+                          id="custom-charity-contact"
+                          value={customCharity.contact}
+                          onChange={(e) => setCustomCharity(prev => ({ ...prev, contact: e.target.value }))}
+                          placeholder="Contact person name"
+                        />
+                      </div>
+                      <div>
+                        <Label htmlFor="custom-charity-email">Email *</Label>
+                        <Input
+                          id="custom-charity-email"
+                          type="email"
+                          value={customCharity.email}
+                          onChange={(e) => setCustomCharity(prev => ({ ...prev, email: e.target.value }))}
+                          placeholder="charity@example.com"
+                        />
+                      </div>
+                      <div>
+                        <Label htmlFor="custom-charity-phone">Phone</Label>
+                        <Input
+                          id="custom-charity-phone"
+                          value={customCharity.phone}
+                          onChange={(e) => setCustomCharity(prev => ({ ...prev, phone: e.target.value }))}
+                          placeholder="(555) 123-4567"
+                        />
+                      </div>
+                      <div className="md:col-span-2">
+                        <Label htmlFor="custom-charity-address">Address</Label>
+                        <Textarea
+                          id="custom-charity-address"
+                          value={customCharity.address}
+                          onChange={(e) => setCustomCharity(prev => ({ ...prev, address: e.target.value }))}
+                          placeholder="Enter full address"
+                          rows={3}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              <Alert>
+                <AlertTriangle className="h-4 w-4" />
+                <AlertDescription>
+                  <strong>Important:</strong> Custom charities will be contacted to join Stripe Connect for automated payments. 
+                  If they cannot complete Stripe onboarding, payments will need to be processed manually, which may cause delays.
+                </AlertDescription>
+              </Alert>
+
+              <div className="flex justify-end">
+                <Button 
+                  onClick={handleCharitySelection}
+                  disabled={updateCharitySelectionMutation.isPending || 
+                    (useCustomCharity && (!customCharity.name || !customCharity.email)) ||
+                    (!useCustomCharity && !selectedCharityId)}
+                  className="flex items-center space-x-2"
+                >
+                  <Save size={16} />
+                  <span>
+                    {updateCharitySelectionMutation.isPending ? 'Saving...' : 'Save Charity Selection'}
+                  </span>
+                </Button>
               </div>
             </CardContent>
           </Card>

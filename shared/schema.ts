@@ -14,6 +14,7 @@ export const users = pgTable("users", {
   lastEmailCheck: timestamp("last_email_check"),
   charityName: text("charity_name").default("Email Guardian"),
   charityId: varchar("charity_id").references(() => charities.id), // Reference to selected charity
+  customCharityData: json("custom_charity_data"), // JSON field for custom charity details
   useAiResponses: boolean("use_ai_responses").default(false),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),

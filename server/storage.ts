@@ -24,6 +24,7 @@ export interface IStorage {
   updateUserEmailCheckInterval(id: string, intervalMinutes: number): Promise<User>;
   updateUserCharityName(id: string, charityName: string): Promise<User>;
   updateUserCharity(userId: string, charityId: string): Promise<User>;
+  updateUserCharitySelection(id: string, charityData: any): Promise<User>;
   updateUserAiResponseSetting(id: string, useAiResponses: boolean): Promise<User>;
   deleteUser(id: string): Promise<void>;
 
@@ -175,6 +176,29 @@ export class DatabaseStorage implements IStorage {
       .where(eq(users.id, userId))
       .returning();
     return result;
+  }
+
+  async updateUserCharitySelection(id: string, charityData: any): Promise<User> {
+    const updateData: any = {
+      updatedAt: new Date(),
+    };
+
+    if (charityData.type === 'selected') {
+      updateData.charityId = charityData.charityId;
+      updateData.charityName = charityData.charity.name;
+    } else if (charityData.type === 'custom') {
+      updateData.charityId = null;
+      updateData.charityName = charityData.charity.name;
+      // Store custom charity details in a JSON field or separate table
+      updateData.customCharityData = JSON.stringify(charityData.charity);
+    }
+
+    const [user] = await db
+      .update(users)
+      .set(updateData)
+      .where(eq(users.id, id))
+      .returning();
+    return user;
   }
 
   async deleteUser(id: string): Promise<void> {
