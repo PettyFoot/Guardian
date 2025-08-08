@@ -19,6 +19,34 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
 let processingInterval: NodeJS.Timeout | null = null;
 let payoutInterval: NodeJS.Timeout | null = null;
 
+// Email notification function for payouts
+async function sendPayoutNotificationEmail(charity: any, payoutDetails: any) {
+  try {
+    const adminEmail = 'louis@correra.org';
+    const subject = `Payout Processed - ${charity.name}`;
+    const body = `
+      <h2>Payout Processed Successfully</h2>
+      <p><strong>Charity:</strong> ${charity.name}</p>
+      <p><strong>Payout Amount:</strong> $${payoutDetails.amount}</p>
+      <p><strong>Platform Fee:</strong> $${payoutDetails.platformFee}</p>
+      <p><strong>Total Donations:</strong> $${payoutDetails.totalDonations}</p>
+      <p><strong>Donation Count:</strong> ${payoutDetails.donationCount}</p>
+      <p><strong>Stripe Transfer ID:</strong> ${payoutDetails.transferId}</p>
+      <p><strong>Processed At:</strong> ${new Date().toISOString()}</p>
+    `;
+
+    // For now, we'll log the email content
+    // In production, you'd use a proper email service like SendGrid, AWS SES, etc.
+    console.log(`\n=== PAYOUT NOTIFICATION EMAIL ===`);
+    console.log(`To: ${adminEmail}`);
+    console.log(`Subject: ${subject}`);
+    console.log(`Body: ${body}`);
+    console.log(`=== END PAYOUT NOTIFICATION ===\n`);
+  } catch (error: any) {
+    console.error('Error sending payout notification email:', error.message);
+  }
+}
+
 // Payout processing function
 async function processCharityPayouts() {
   console.log(`[${new Date().toISOString()}] Starting charity payout processing...`);
@@ -37,6 +65,9 @@ async function processCharityPayouts() {
         
         let shouldPayout = false;
         switch (charity.payoutFrequency) {
+          case 'minute':
+            shouldPayout = now.getTime() - lastPayout.getTime() >= 1 * 60 * 1000; // 1 minute
+            break;
           case 'daily':
             shouldPayout = now.getTime() - lastPayout.getTime() >= 24 * 60 * 60 * 1000;
             break;
@@ -87,6 +118,18 @@ async function processCharityPayouts() {
           },
         });
 
+        // Create payout record
+        await storage.createPayout({
+          charityId: charity.id,
+          charityName: charity.name,
+          stripeTransferId: transfer.id,
+          amount: payoutAmount.toFixed(2),
+          platformFee: platformFee.toFixed(2),
+          totalDonations: totalAmount.toFixed(2),
+          donationCount: donations.length.toString(),
+          status: 'completed',
+        });
+
         // Update donation records
         for (const donation of donations) {
           await storage.updateDonationPayout(donation.id, transfer.id);
@@ -94,6 +137,15 @@ async function processCharityPayouts() {
 
         // Update charity payout record
         await storage.updateCharityPayout(charity.id, payoutAmount.toFixed(2));
+
+        // Send payout notification email
+        await sendPayoutNotificationEmail(charity, {
+          amount: payoutAmount.toFixed(2),
+          platformFee: platformFee.toFixed(2),
+          totalDonations: totalAmount.toFixed(2),
+          donationCount: donations.length,
+          transferId: transfer.id,
+        });
 
         results.push({
           charityId: charity.id,
@@ -1116,7 +1168,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/charities", async (req, res) => {
     try {
       const charities = await storage.getAllCharities();
-      res.json(charities);
+      // Only return charities with completed Stripe onboarding for user selection
+      const eligibleCharities = charities.filter(charity => charity.stripeOnboardingComplete);
+      res.json(eligibleCharities);
     } catch (error: any) {
       res.status(500).json({ message: "Error fetching charities: " + error.message });
     }
@@ -1127,7 +1181,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { id } = req.params;
       const { frequency } = req.body;
       
-      if (!['daily', 'weekly', 'monthly'].includes(frequency)) {
+      if (!['daily', 'weekly', 'monthly', 'minute'].includes(frequency)) {
         return res.status(400).json({ message: "Invalid payout frequency" });
       }
 
@@ -1266,6 +1320,154 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error: any) {
       console.error('Payout processing error:', error);
       res.status(500).json({ message: "Error processing payouts: " + error.message });
+    }
+  });
+
+  // Get all payouts (admin endpoint)
+  app.get("/api/admin/payouts", async (req, res) => {
+    try {
+      const payouts = await storage.getAllPayouts();
+      res.json(payouts);
+    } catch (error: any) {
+      res.status(500).json({ message: "Error fetching payouts: " + error.message });
+    }
+  });
+
+  // Get payouts by charity
+  app.get("/api/admin/payouts/charity/:charityId", async (req, res) => {
+    try {
+      const { charityId } = req.params;
+      const payouts = await storage.getPayoutsByCharity(charityId);
+      res.json(payouts);
+    } catch (error: any) {
+      res.status(500).json({ message: "Error fetching charity payouts: " + error.message });
+    }
+  });
+
+  // Get payouts by date range
+  app.get("/api/admin/payouts/date-range", async (req, res) => {
+    try {
+      const { startDate, endDate } = req.query;
+      
+      if (!startDate || !endDate) {
+        return res.status(400).json({ message: "Start date and end date are required" });
+      }
+
+      const payouts = await storage.getPayoutsByDateRange(
+        new Date(startDate as string),
+        new Date(endDate as string)
+      );
+      res.json(payouts);
+    } catch (error: any) {
+      res.status(500).json({ message: "Error fetching payouts by date range: " + error.message });
+    }
+  });
+
+  // Test payment endpoint for testing payouts
+  app.post("/api/admin/test-payment", async (req, res) => {
+    try {
+      const { charityId, amount = 1.00 } = req.body;
+      
+      if (!charityId) {
+        return res.status(400).json({ message: "Charity ID is required" });
+      }
+
+      const charity = await storage.getCharity(charityId);
+      if (!charity) {
+        return res.status(404).json({ message: "Charity not found" });
+      }
+
+      if (!charity.stripeOnboardingComplete) {
+        return res.status(400).json({ message: "Charity must have completed Stripe onboarding" });
+      }
+
+      // Create a test donation
+      const testDonation = await storage.createDonation({
+        userId: 'test-user', // You might want to create a test user
+        charityId: charityId,
+        amount: amount.toString(),
+        senderEmail: 'test@example.com',
+        status: 'completed',
+        stripeSessionId: `test_${Date.now()}`,
+      });
+
+      // Process payout immediately for testing
+      const results = await processCharityPayouts();
+      
+      res.json({ 
+        message: "Test payment processed",
+        testDonation,
+        payoutResults: results
+      });
+    } catch (error: any) {
+      console.error('Test payment error:', error);
+      res.status(500).json({ message: "Error processing test payment: " + error.message });
+    }
+  });
+
+  // Get payout summary for email notifications
+  app.get("/api/admin/payout-summary", async (req, res) => {
+    try {
+      const { period = 'daily' } = req.query; // daily, weekly, monthly
+      
+      const now = new Date();
+      let startDate: Date;
+      
+      switch (period) {
+        case 'daily':
+          startDate = new Date(now);
+          startDate.setHours(0, 0, 0, 0);
+          break;
+        case 'weekly':
+          startDate = new Date(now);
+          startDate.setDate(startDate.getDate() - 7);
+          break;
+        case 'monthly':
+          startDate = new Date(now);
+          startDate.setMonth(startDate.getMonth() - 1);
+          break;
+        default:
+          return res.status(400).json({ message: "Invalid period. Use 'daily', 'weekly', or 'monthly'" });
+      }
+
+      const payouts = await storage.getPayoutsByDateRange(startDate, now);
+      
+      const summary = {
+        period,
+        startDate: startDate.toISOString(),
+        endDate: now.toISOString(),
+        totalPayouts: payouts.length,
+        totalAmount: payouts.reduce((sum, p) => sum + parseFloat(p.amount), 0).toFixed(2),
+        totalFees: payouts.reduce((sum, p) => sum + parseFloat(p.platformFee), 0).toFixed(2),
+        totalDonations: payouts.reduce((sum, p) => sum + parseFloat(p.totalDonations), 0).toFixed(2),
+        charities: payouts.reduce((acc, p) => {
+          if (!acc[p.charityName]) {
+            acc[p.charityName] = {
+              payoutCount: 0,
+              totalAmount: 0,
+              totalDonations: 0,
+            };
+          }
+          acc[p.charityName].payoutCount++;
+          acc[p.charityName].totalAmount += parseFloat(p.amount);
+          acc[p.charityName].totalDonations += parseFloat(p.totalDonations);
+          return acc;
+        }, {} as Record<string, any>),
+        payouts: payouts.map(p => ({
+          id: p.id,
+          charityName: p.charityName,
+          amount: p.amount,
+          platformFee: p.platformFee,
+          totalDonations: p.totalDonations,
+          donationCount: p.donationCount,
+          stripeTransferId: p.stripeTransferId,
+          processedAt: p.processedAt,
+        })),
+      };
+
+      res.json(summary);
+    } catch (error: any) {
+      res.status(500).json({ message: "Error generating payout summary: " + error.message });
     }
   });
 

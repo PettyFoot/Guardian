@@ -6,7 +6,8 @@ import {
   type Donation, type InsertDonation,
   type EmailStats, type InsertEmailStats,
   type PaymentIntention, type InsertPaymentIntention,
-  charities, type InsertCharity
+  charities, type InsertCharity,
+  payouts, type InsertPayout, type Payout
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, and, gte, lte, sql } from "drizzle-orm";
@@ -78,6 +79,13 @@ export interface IStorage {
   updateCharityPayoutFrequency(id: string, frequency: string): Promise<InsertCharity>;
   getCharitiesForPayout(): Promise<InsertCharity[]>;
   updateCharityPayout(id: string, amount: string): Promise<InsertCharity>;
+
+  // Payout methods
+  createPayout(data: InsertPayout): Promise<Payout>;
+  getAllPayouts(): Promise<Payout[]>;
+  getPayoutsByCharity(charityId: string): Promise<Payout[]>;
+  getPayoutsByDateRange(startDate: Date, endDate: Date): Promise<Payout[]>;
+  getPayoutByStripeTransfer(transferId: string): Promise<Payout | undefined>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -540,6 +548,46 @@ export class DatabaseStorage implements IStorage {
       })
       .where(eq(charities.id, id))
       .returning();
+    return result;
+  }
+
+  // Payout methods
+  async createPayout(data: InsertPayout): Promise<Payout> {
+    const [result] = await db.insert(payouts).values({
+      ...data,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    }).returning();
+    return result;
+  }
+
+  async getAllPayouts(): Promise<Payout[]> {
+    return await db.select()
+      .from(payouts)
+      .orderBy(desc(payouts.createdAt));
+  }
+
+  async getPayoutsByCharity(charityId: string): Promise<Payout[]> {
+    return await db.select()
+      .from(payouts)
+      .where(eq(payouts.charityId, charityId))
+      .orderBy(desc(payouts.createdAt));
+  }
+
+  async getPayoutsByDateRange(startDate: Date, endDate: Date): Promise<Payout[]> {
+    return await db.select()
+      .from(payouts)
+      .where(and(
+        gte(payouts.createdAt, startDate),
+        lte(payouts.createdAt, endDate)
+      ))
+      .orderBy(desc(payouts.createdAt));
+  }
+
+  async getPayoutByStripeTransfer(transferId: string): Promise<Payout | undefined> {
+    const [result] = await db.select()
+      .from(payouts)
+      .where(eq(payouts.stripeTransferId, transferId));
     return result;
   }
 }

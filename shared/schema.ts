@@ -82,10 +82,26 @@ export const charities = pgTable("charities", {
   stripeConnectAccountId: text("stripe_connect_account_id"),
   stripeOnboardingComplete: boolean("stripe_onboarding_complete").default(false),
   isActive: boolean("is_active").default(true),
-  payoutFrequency: text("payout_frequency").default("weekly"), // daily, weekly, monthly
+  payoutFrequency: text("payout_frequency").default("weekly"), // daily, weekly, monthly, minute
   lastPayoutDate: timestamp("last_payout_date"),
   totalReceived: decimal("total_received", { precision: 12, scale: 2 }).default("0.00"),
   totalPaidOut: decimal("total_paid_out", { precision: 12, scale: 2 }).default("0.00"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const payouts = pgTable("payouts", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  charityId: varchar("charity_id").notNull().references(() => charities.id),
+  charityName: text("charity_name").notNull(),
+  stripeTransferId: text("stripe_transfer_id").notNull(),
+  amount: decimal("amount", { precision: 10, scale: 2 }).notNull(),
+  platformFee: decimal("platform_fee", { precision: 10, scale: 2 }).notNull(),
+  totalDonations: decimal("total_donations", { precision: 10, scale: 2 }).notNull(),
+  donationCount: decimal("donation_count", { precision: 10, scale: 0 }).notNull(),
+  status: text("status").notNull().default("completed"), // completed, failed, pending
+  errorMessage: text("error_message"),
+  processedAt: timestamp("processed_at").defaultNow(),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -109,6 +125,7 @@ export const paymentIntentions = pgTable("payment_intentions", {
 export const charitiesRelations = relations(charities, ({ many }) => ({
   users: many(users),
   donations: many(donations),
+  payouts: many(payouts),
 }));
 
 export const usersRelations = relations(users, ({ one, many }) => ({
@@ -167,6 +184,13 @@ export const paymentIntentionsRelations = relations(paymentIntentions, ({ one })
   }),
 }));
 
+export const payoutsRelations = relations(payouts, ({ one }) => ({
+  charity: one(charities, {
+    fields: [payouts.charityId],
+    references: [charities.id],
+  }),
+}));
+
 // Insert schemas
 export const insertUserSchema = createInsertSchema(users).omit({
   id: true,
@@ -213,6 +237,12 @@ export const insertPaymentIntentionSchema = createInsertSchema(paymentIntentions
   paidAt: true,
 });
 
+export const insertPayoutSchema = createInsertSchema(payouts).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
 // Types
 export type User = typeof users.$inferSelect;
 export type InsertUser = z.infer<typeof insertUserSchema>;
@@ -234,3 +264,6 @@ export type InsertCharity = z.infer<typeof insertCharitySchema>;
 
 export type PaymentIntention = typeof paymentIntentions.$inferSelect;
 export type InsertPaymentIntention = z.infer<typeof insertPaymentIntentionSchema>;
+
+export type Payout = typeof payouts.$inferSelect;
+export type InsertPayout = z.infer<typeof insertPayoutSchema>;
