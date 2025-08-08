@@ -17,6 +17,7 @@ import BusinessWebsite from "@/pages/business-website";
 import PaymentSuccess from "@/pages/payment-success";
 import NotFound from "@/pages/not-found";
 import CharityRegister from "@/pages/charity-register";
+import AdminPayouts from "@/pages/admin-payouts";
 
 function ProtectedRoute({ component: Component }: { component: React.ComponentType }) {
   const { isAuthenticated, isLoading } = useAuth();
@@ -56,6 +57,9 @@ function Router() {
       <Route path="/business" component={BusinessWebsite} />
       <Route path="/payment-success" component={PaymentSuccess} />
       <Route path="/charity-register" component={CharityRegister} />
+      <Route path="/admin-payouts">
+        <ProtectedRoute component={AdminPayouts} />
+      </Route>
       <Route path="/">
         {isAuthenticated ? <Dashboard /> : <Redirect to="/setup" />}
       </Route>
