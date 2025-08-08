@@ -61,7 +61,6 @@ export default function Settings() {
   const [autoProcessing, setAutoProcessing] = useState(true);
   const [donationAmount, setDonationAmount] = useState("1.00");
   const [emailCheckInterval, setEmailCheckInterval] = useState("1.0");
-  const [charityName, setCharityName] = useState("");
   const [useAiResponses, setUseAiResponses] = useState(false);
   const [selectedCharityId, setSelectedCharityId] = useState("");
   const [useCustomCharity, setUseCustomCharity] = useState(false);
@@ -101,13 +100,21 @@ Email Guardian System`);
     }
   });
 
+  // Get the current charity name for display
+  const getCurrentCharityName = () => {
+    if (useCustomCharity) {
+      return customCharity.name || "Custom Charity";
+    } else if (selectedCharityId) {
+      const selectedCharity = charities.find((c: { id: string; name: string }) => c.id === selectedCharityId);
+      return selectedCharity?.name || "Selected Charity";
+    }
+    return "No Charity Selected";
+  };
+
   // Load user's current settings
   useEffect(() => {
     if ((user as any)?.emailCheckInterval) {
       setEmailCheckInterval((user as any).emailCheckInterval);
-    }
-    if ((user as any)?.charityName) {
-      setCharityName((user as any).charityName);
     }
     if ((user as any)?.useAiResponses !== undefined) {
       setUseAiResponses((user as any).useAiResponses);
@@ -154,33 +161,6 @@ Email Guardian System`);
     const intervalMinutes = parseFloat(value);
     updateIntervalMutation.mutate(intervalMinutes);
   };
-
-  const updateCharityNameMutation = useMutation({
-    mutationFn: async (newCharityName: string) => {
-      const res = await apiRequest("PATCH", `/api/user/${user?.id}/charity-name`, { 
-        charityName: newCharityName 
-      });
-      if (!res.ok) {
-        const errorData = await res.json();
-        throw new Error(errorData.message || 'Failed to update charity name');
-      }
-      return res.json();
-    },
-    onSuccess: () => {
-      toast({
-        title: "Charity Name Updated",
-        description: "Your charity name has been updated successfully.",
-      });
-      queryClient.invalidateQueries({ queryKey: [`/api/user/${user?.id}`] });
-    },
-    onError: (error: any) => {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to update charity name",
-        variant: "destructive",
-      });
-    }
-  });
 
   const updateAiResponseMutation = useMutation({
     mutationFn: async (useAi: boolean) => {
@@ -236,12 +216,6 @@ Email Guardian System`);
     }
   });
 
-  const handleCharityNameSave = () => {
-    if (charityName.trim()) {
-      updateCharityNameMutation.mutate(charityName.trim());
-    }
-  };
-
   const handleCharitySelection = () => {
     if (useCustomCharity) {
       // Save custom charity
@@ -251,7 +225,7 @@ Email Guardian System`);
       });
     } else if (selectedCharityId) {
       // Save selected charity
-      const selectedCharity = charities.find(c => c.id === selectedCharityId);
+      const selectedCharity = charities.find((c: any) => c.id === selectedCharityId);
       if (selectedCharity) {
         updateCharitySelectionMutation.mutate({
           type: 'selected',
@@ -435,15 +409,16 @@ Email Guardian System`);
             </CardContent>
           </Card>
 
-          {/* Donation Settings */}
+          {/* Combined Donation & Charity Settings */}
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center space-x-2">
                 <DollarSign className="text-green-600" size={20} />
-                <span>Donation Configuration</span>
+                <span>Donation & Charity Configuration</span>
               </CardTitle>
             </CardHeader>
-            <CardContent className="space-y-4">
+            <CardContent className="space-y-6">
+              {/* Donation Amount */}
               <div>
                 <Label htmlFor="donationAmount" className="text-base font-medium">Donation Amount (USD)</Label>
                 <p className="text-sm text-gray-500 mb-2">Amount required for unknown senders to access your inbox</p>
@@ -459,43 +434,17 @@ Email Guardian System`);
                 />
               </div>
 
+              {/* Current Charity Display */}
               <div>
-                <Label htmlFor="charity-name" className="text-base font-medium">Charity Name</Label>
-                <p className="text-sm text-gray-500 mb-2">The name shown to senders in payment requests (e.g., "Donation to [Your Charity]")</p>
-                <div className="flex items-center space-x-2 max-w-md">
-                  <Input
-                    id="charity-name"
-                    type="text"
-                    value={charityName}
-                    onChange={(e) => setCharityName(e.target.value)}
-                    placeholder="Email Guardian"
-                    data-testid="input-charity-name"
-                  />
-                  <Button 
-                    onClick={handleCharityNameSave} 
-                    variant="outline" 
-                    size="sm"
-                    disabled={updateCharityNameMutation.isPending || !charityName.trim()}
-                    data-testid="button-save-charity-name"
-                  >
-                    <Save size={16} className="mr-1" />
-                    {updateCharityNameMutation.isPending ? 'Saving...' : 'Save'}
-                  </Button>
+                <Label className="text-base font-medium">Current Charity</Label>
+                <p className="text-sm text-gray-500 mb-2">The charity that will receive donations from your email filtering system</p>
+                <div className="p-3 bg-gray-50 rounded-lg border">
+                  <p className="text-sm font-medium text-gray-900">{getCurrentCharityName()}</p>
+                  <p className="text-xs text-gray-500 mt-1">This appears in Stripe payment descriptions</p>
                 </div>
-                <p className="text-sm text-gray-400 mt-1">This appears in Stripe payment descriptions</p>
               </div>
-            </CardContent>
-          </Card>
 
-          {/* Charity Selection */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center space-x-2">
-                <Building2 className="text-blue-600" size={20} />
-                <span>Charity Selection</span>
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-6">
+              {/* Charity Selection Toggle */}
               <div className="flex items-center justify-between">
                 <div>
                   <Label className="text-base font-medium">Use Custom Charity</Label>
@@ -507,6 +456,7 @@ Email Guardian System`);
                 />
               </div>
 
+              {/* Charity Selection Options */}
               {!useCustomCharity ? (
                 <div className="space-y-4">
                   <div>
