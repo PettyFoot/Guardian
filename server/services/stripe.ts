@@ -31,7 +31,7 @@ export class StripeService {
       after_completion: {
         type: 'redirect',
         redirect: {
-          url: `${process.env.FRONTEND_URL || 'http://localhost:5000'}/donation-success`
+          url: `${process.env.VITE_APP_URL || process.env.FRONTEND_URL || 'http://localhost:5000'}/donation-success`
         }
       },
     });
@@ -58,8 +58,8 @@ export class StripeService {
         quantity: 1,
       }],
       mode: 'payment',
-      success_url: `${process.env.FRONTEND_URL || 'http://localhost:5000'}/donation-success?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${process.env.FRONTEND_URL || 'http://localhost:5000'}/donation-cancelled`,
+      success_url: `${process.env.VITE_APP_URL || process.env.FRONTEND_URL || 'http://localhost:5000'}/donation-success?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${process.env.VITE_APP_URL || process.env.FRONTEND_URL || 'http://localhost:5000'}/donation-cancelled`,
       metadata: {
         sender_email: senderEmail,
         pending_email_id: pendingEmailId,

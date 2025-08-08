@@ -770,7 +770,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         after_completion: {
           type: 'redirect',
           redirect: {
-            url: `${process.env.VITE_APP_URL || 'https://emailguardian.com'}/payment-success?sender=${encodeURIComponent(senderEmail)}&target=${encodeURIComponent(targetEmail)}`
+            url: `${process.env.VITE_APP_URL || process.env.FRONTEND_URL || 'http://localhost:5000'}/payment-success?sender=${encodeURIComponent(senderEmail)}&target=${encodeURIComponent(targetEmail)}`
           }
         },
       });

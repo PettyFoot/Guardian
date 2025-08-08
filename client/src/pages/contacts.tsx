@@ -116,6 +116,9 @@ export default function Contacts() {
                 <DialogContent>
                   <DialogHeader>
                     <DialogTitle>Add New Contact</DialogTitle>
+                    <DialogDescription>
+                      Add an email address to your whitelist so their messages go directly to your inbox.
+                    </DialogDescription>
                   </DialogHeader>
                   <form onSubmit={handleAddContact} className="space-y-4">
                     <div>
