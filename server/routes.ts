@@ -1068,7 +1068,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
         // Create account link for onboarding
         // Use HTTPS URLs for Stripe Connect in live mode
-        const baseUrl = process.env.VITE_APP_URL || (process.env.NODE_ENV === 'production' ? 'https://your-repl-url.replit.app' : 'http://localhost:5000');
+        const baseUrl = process.env.VITE_APP_URL || (process.env.NODE_ENV === 'production' ? `https://${process.env.HOST_URL}` : 'http://localhost:5000');
         const accountLink = await stripe.accountLinks.create({
           account: account.id,
           refresh_url: `${baseUrl}/charity-register`,
