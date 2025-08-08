@@ -1138,6 +1138,68 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Charity setup completion page
+  app.get("/charity-setup-complete", async (req, res) => {
+    const { charity_id } = req.query;
+    
+    if (!charity_id) {
+      return res.status(400).send("Missing charity ID");
+    }
+
+    try {
+      const charity = await storage.getCharity(charity_id as string);
+      if (!charity) {
+        return res.status(404).send("Charity not found");
+      }
+
+      // Check if Stripe account is properly set up
+      if (charity.stripeConnectAccountId) {
+        try {
+          const account = await stripe.accounts.retrieve(charity.stripeConnectAccountId);
+          
+          // Update onboarding status if account is ready
+          if (account.charges_enabled && account.details_submitted) {
+            await storage.updateCharityStripeAccount(charity.id, charity.stripeConnectAccountId, true);
+          }
+        } catch (error) {
+          console.error('Error checking Stripe account:', error);
+        }
+      }
+
+      res.send(`
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <title>Charity Setup Complete</title>
+          <style>
+            body { font-family: Arial, sans-serif; max-width: 600px; margin: 50px auto; padding: 20px; text-align: center; }
+            .success { color: #22c55e; }
+            .warning { color: #f59e0b; }
+            .info { background: #f3f4f6; padding: 20px; border-radius: 8px; margin: 20px 0; }
+          </style>
+        </head>
+        <body>
+          <h1 class="success">✅ Charity Setup Complete!</h1>
+          <div class="info">
+            <h3>${charity.name}</h3>
+            <p>Your charity has been registered with Email Guardian.</p>
+            <p><strong>Charity ID:</strong> ${charity.id}</p>
+            ${charity.stripeOnboardingComplete ? 
+              '<p class="success">✅ Stripe Connect setup is complete - you can now receive donations!</p>' : 
+              '<p class="warning">⚠️ Stripe Connect setup may still be processing. You\'ll receive donations once it\'s fully activated.</p>'
+            }
+          </div>
+          <p>Users can now select your charity when making donations through Email Guardian.</p>
+          <a href="/" style="display: inline-block; background: #3b82f6; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; margin-top: 20px;">Return to Home</a>
+        </body>
+        </html>
+      `);
+    } catch (error: any) {
+      console.error('Error in charity setup complete:', error);
+      res.status(500).send("Error processing charity setup completion");
+    }
+  });
+
   // Stripe Connect webhook for charity account updates
   app.post("/api/webhooks/stripe-connect", async (req, res) => {
     const sig = req.headers['stripe-signature'];
@@ -1155,13 +1217,35 @@ export async function registerRoutes(app: Express): Promise<Server> {
     switch (event.type) {
       case 'account.updated':
         const account = event.data.object;
+        console.log(`Account updated: ${account.id}, charges_enabled: ${account.charges_enabled}, details_submitted: ${account.details_submitted}`);
+        
         if (account.charges_enabled && account.details_submitted) {
           // Charity account is ready to receive payments
           const charityId = account.metadata?.charity_id;
           if (charityId) {
             await storage.updateCharityStripeAccount(charityId, account.id, true);
             console.log(`Charity ${charityId} Stripe account now ready for payments`);
+          } else {
+            // Fallback: find charity by stripe account ID
+            const charities = await storage.getAllCharities();
+            const charity = charities.find(c => c.stripeConnectAccountId === account.id);
+            if (charity) {
+              await storage.updateCharityStripeAccount(charity.id, account.id, true);
+              console.log(`Charity ${charity.id} Stripe account now ready for payments (found by account ID)`);
+            }
           }
+        }
+        break;
+      case 'account.onboarding.completed':
+        const completedAccount = event.data.object;
+        console.log(`Account onboarding completed: ${completedAccount.id}`);
+        
+        // Find charity by stripe account ID and update
+        const charities = await storage.getAllCharities();
+        const charity = charities.find(c => c.stripeConnectAccountId === completedAccount.id);
+        if (charity) {
+          await storage.updateCharityStripeAccount(charity.id, completedAccount.id, true);
+          console.log(`Charity ${charity.id} onboarding completed`);
         }
         break;
       default:

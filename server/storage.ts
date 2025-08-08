@@ -513,6 +513,13 @@ export class DatabaseStorage implements IStorage {
     return result;
   }
 
+  async getCharityByStripeAccount(stripeAccountId: string): Promise<InsertCharity | undefined> {
+    const [result] = await db.select()
+      .from(charities)
+      .where(eq(charities.stripeConnectAccountId, stripeAccountId));
+    return result;
+  }
+
   async getCharitiesForPayout(): Promise<InsertCharity[]> {
     return await db.select()
       .from(charities)
