@@ -216,6 +216,53 @@ Email Guardian System`);
     }
   });
 
+  // Set default charity if user doesn't have one selected
+  useEffect(() => {
+    if (user && charities.length > 0 && !charitiesLoading) {
+      // Check if user has a charity selected (either charityId or customCharityData)
+      const hasCharitySelected = (user as any)?.charityId || (user as any)?.customCharityData;
+      
+      if (!hasCharitySelected) {
+        // Select a random charity from the available list
+        const eligibleCharities = charities.filter((charity: any) => charity.stripeOnboardingComplete);
+        
+        if (eligibleCharities.length > 0) {
+          const randomCharity = eligibleCharities[Math.floor(Math.random() * eligibleCharities.length)];
+          
+          // Automatically save the random charity selection
+          updateCharitySelectionMutation.mutate({
+            type: 'selected',
+            charityId: randomCharity.id,
+            charity: randomCharity
+          });
+          
+          // Update local state
+          setSelectedCharityId(randomCharity.id);
+          setUseCustomCharity(false);
+          
+          // Show notification to user
+          toast({
+            title: "Default Charity Selected",
+            description: `"${randomCharity.name}" has been automatically selected as your default charity. You can change this in your settings.`,
+          });
+        }
+      } else if ((user as any)?.charityId) {
+        // User has a selected charity, update local state
+        setSelectedCharityId((user as any).charityId);
+        setUseCustomCharity(false);
+      } else if ((user as any)?.customCharityData) {
+        // User has a custom charity, update local state
+        try {
+          const customCharityData = JSON.parse((user as any).customCharityData);
+          setCustomCharity(customCharityData);
+          setUseCustomCharity(true);
+        } catch (error) {
+          console.error('Error parsing custom charity data:', error);
+        }
+      }
+    }
+  }, [user, charities, charitiesLoading, updateCharitySelectionMutation, toast]);
+
   const handleCharitySelection = () => {
     if (useCustomCharity) {
       // Save custom charity
